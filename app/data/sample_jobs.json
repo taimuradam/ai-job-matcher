@@ -1,0 +1,44 @@
+[
+  {
+    "title": "AI Engineer Intern",
+    "company": "Signal Forge",
+    "location": "Remote",
+    "employment_type": "Internship",
+    "description": "Build Python and FastAPI services that help match resumes to job descriptions. Work with LLM prompts, OpenAI APIs, SQL, Docker, and evaluation dashboards. Looking for candidates who can explain scoring clearly and iterate on retrieval or RAG pipelines."
+  },
+  {
+    "title": "Backend Engineer Intern",
+    "company": "Northline Systems",
+    "location": "Phoenix, AZ",
+    "employment_type": "Internship",
+    "description": "Support backend services using Python, FastAPI, REST APIs, SQL, Git, and Docker. Ideal candidates have experience shipping APIs, writing clean business logic, and working with structured application data."
+  },
+  {
+    "title": "Data Analyst Intern",
+    "company": "Atlas Metrics",
+    "location": "Tempe, AZ",
+    "employment_type": "Internship",
+    "description": "Analyze applicant funnel and hiring data with SQL, Python, Pandas, data visualization tools, and experimentation. Strong communication and practical business insights are required."
+  },
+  {
+    "title": "Machine Learning Engineer Intern",
+    "company": "Model Harbor",
+    "location": "Remote",
+    "employment_type": "Internship",
+    "description": "Prototype ML workflows using Python, scikit-learn, PyTorch, NLP, and data analysis. Bonus for LLM evaluations, retrieval systems, and cloud deployment familiarity."
+  },
+  {
+    "title": "Product Analyst",
+    "company": "Cinder Labs",
+    "location": "Remote",
+    "employment_type": "Full-time",
+    "description": "Measure product usage with SQL, dashboards, A/B testing, and data storytelling. Candidates should be comfortable turning ambiguous questions into practical insights and communicating findings to stakeholders."
+  },
+  {
+    "title": "Frontend Engineer Intern",
+    "company": "Moss Circuit",
+    "location": "Hybrid",
+    "employment_type": "Internship",
+    "description": "Build responsive UI with JavaScript, TypeScript, React, and API integrations. Experience with design systems, accessibility, and collaboration with backend teams is preferred."
+  }
+]

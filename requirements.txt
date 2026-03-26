@@ -1,0 +1,9 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+jinja2==3.1.6
+python-multipart==0.0.17
+pydantic==2.10.3
+httpx==0.28.1
+
+# Optional resume parsers
+pypdf==5.1.0

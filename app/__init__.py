@@ -1,0 +1,1 @@
+"""Job insight tool package."""
