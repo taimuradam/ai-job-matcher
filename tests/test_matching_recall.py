@@ -1,208 +1,201 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
-from app.schemas import CandidatePreferenceInput, JobRecord, ProviderStatus, SearchPlan
-from app.services.evaluation import evaluate_saved_search_case
-from app.services.job_search import apply_search_funnel, build_search_plan, normalize_job
-from app.services.profile_extraction import build_candidate_profile
-from app.services.scoring import analyze_search_results
+import pytest
+from fastapi.testclient import TestClient
+
+from app.copilot.schemas import ProviderFetchStatus, RawListingData
+from app.copilot.source_orchestrator import OrchestratedListings
 
 
-def test_inferred_preferences_do_not_hard_filter_without_confirmation() -> None:
-    candidate = build_candidate_profile(
-        "resume.txt",
-        """
-        Backend student based in Phoenix, Arizona.
-        Building Python APIs with FastAPI and SQL.
-        Looking for remote or hybrid early-career work.
-        """
-    )
-    preferences = CandidatePreferenceInput(
-        target_roles=["backend engineer"],
-        preferred_locations=["Phoenix, AZ"],
-        remote_preference="hybrid_or_remote",
-        employment_preferences=["internship"],
-        must_have_skills=["Python", "FastAPI", "SQL"],
-        search_mode="broad_recall",
-        confirmed_preferences={},
-    )
-    jobs = [
-        normalize_job(
-            JobRecord(
-                title="Backend Engineer Intern",
-                company="Phoenix Apps",
-                location="Hybrid - Phoenix, AZ",
-                description="Required: Python, FastAPI, SQL. Build backend APIs.",
-                employment_type="Internship",
-                source="Fixture",
-            )
-        ),
-        normalize_job(
-            JobRecord(
-                title="Backend Developer",
-                company="Remote Stack",
-                location="Remote",
-                description="Required: Python, APIs, SQL, Docker. Build product backend services.",
-                employment_type="Full-time",
-                source="Fixture",
-            )
-        ),
-    ]
+@pytest.fixture
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("JOB_MATCHER_DB_PATH", str(tmp_path / "copilot.sqlite3"))
+    import app.main as main_module
 
-    filtered, _, diagnostics = apply_search_funnel(
-        candidate=candidate,
-        preferences=preferences,
-        jobs=jobs,
-    )
-
-    assert len(filtered) == 2
-    assert diagnostics.active_hard_filters == []
+    main_module = importlib.reload(main_module)
+    with TestClient(main_module.app) as test_client:
+        yield test_client, main_module
 
 
-def test_low_result_runs_relax_confirmed_filters_instead_of_stopping_early() -> None:
-    candidate = build_candidate_profile(
-        "resume.txt",
-        """
-        Backend-focused student building Python APIs with FastAPI and SQL.
-        1 year internship experience.
-        """
-    )
-    preferences = CandidatePreferenceInput(
-        target_roles=["backend engineer"],
-        preferred_locations=["Phoenix, AZ"],
-        remote_preference="onsite_friendly",
-        employment_preferences=["internship"],
-        must_have_skills=["Python", "FastAPI", "SQL"],
-        search_mode="broad_recall",
-        confirmed_preferences={
-            "preferred_locations": True,
-            "remote_preference": True,
-            "employment_preferences": True,
+def _save_default_profile(test_client: TestClient) -> None:
+    response = test_client.put(
+        "/api/profile",
+        json={
+            "profile": {
+                "filename": "resume.txt",
+                "summary": "Targeting backend internships.",
+                "skills_confirmed": ["Python", "FastAPI", "SQL"],
+                "skills_inferred": ["Docker"],
+                "core_roles": ["backend engineer"],
+                "adjacent_roles": ["software engineer", "platform engineer"],
+                "seniority": "early-career",
+                "industries": ["developer tools"],
+                "preferred_locations": ["Phoenix, AZ"],
+                "remote_preference": "remote_or_hybrid",
+                "employment_preferences": ["internship"],
+                "education_level": ["Bachelor's"],
+                "years_experience": 1,
+                "projects": [
+                    {
+                        "title": "Platform Tooling",
+                        "summary": "Built backend APIs with Python, FastAPI, SQL, and Docker for internal tooling.",
+                        "related_skills": ["Python", "FastAPI", "SQL", "Docker"],
+                        "confidence": 0.85,
+                    }
+                ],
+                "evidence": [
+                    {
+                        "label": "Project",
+                        "detail": "Built backend APIs with Python and SQL for internal tooling.",
+                        "confidence": 0.8,
+                    }
+                ],
+                "confidence": {"core_roles": 0.83},
+                "signals": ["Built backend APIs for product teams."],
+                "llm_summary": "Targeting backend internships."
+            },
+            "target": {
+                "target_roles": ["backend engineer"],
+                "role_families": ["backend engineer", "software engineer", "platform engineer"],
+                "query_terms": ["backend engineer intern", "software engineer intern", "python backend engineer"],
+                "preferred_locations": ["Phoenix, AZ"],
+                "work_modes": ["remote", "hybrid"],
+                "employment_preferences": ["internship"],
+                "must_have_skills": ["Python", "FastAPI", "SQL"],
+                "excluded_keywords": ["sales"],
+                "seniority_ceiling": "entry-level",
+                "search_mode": "balanced",
+                "strict_location": False,
+                "strict_work_mode": False,
+                "strict_employment": False,
+                "strict_must_have": False,
+                "providers": {"remotive": True, "remoteok": True, "imports": True}
+            }
         },
     )
-    jobs = [
-        normalize_job(
-            JobRecord(
-                title="Backend Engineer",
-                company="Remote Stack",
-                location="Remote",
-                description="Required: Python, FastAPI, SQL. Build backend services.",
-                employment_type="Full-time",
-                source="Fixture",
-            )
-        ),
-        normalize_job(
-            JobRecord(
-                title="Software Engineer Intern",
-                company="Coast Labs",
-                location="Remote",
-                description="Build Python APIs, SQL tooling, and internal platforms.",
-                employment_type="Internship",
-                source="Fixture",
-            )
-        ),
-    ]
-
-    filtered, _, diagnostics = apply_search_funnel(
-        candidate=candidate,
-        preferences=preferences,
-        jobs=jobs,
-    )
-
-    assert len(filtered) == 2
-    assert diagnostics.fallback_triggered is True
-    assert diagnostics.relaxation_steps
+    assert response.status_code == 200
 
 
-def test_generic_location_parsing_handles_arbitrary_city_and_state_names() -> None:
-    candidate = build_candidate_profile(
-        "resume.txt",
-        """
-        Software engineer based in Seattle, WA.
-        Open to remote work and willing to work from Austin, Texas.
-        Built Python and React applications.
-        """
-    )
-    job = normalize_job(
-        JobRecord(
-            title="Software Engineer Intern",
-            company="Windy City Apps",
-            location="Hybrid - Chicago, IL",
-            description="Build APIs and internal tools with Python and SQL.",
-            employment_type="Internship",
-            source="Fixture",
+def test_search_run_uses_imports_and_live_sources_through_same_pipeline(client, monkeypatch) -> None:
+    test_client, _ = client
+    _save_default_profile(test_client)
+
+    def fake_collect_live_listings(_target):
+        return OrchestratedListings(
+            listings=[
+                RawListingData(
+                    title="Backend Engineer Intern",
+                    company="Phoenix Apps",
+                    location="Hybrid - Phoenix, AZ",
+                    description="Required: Python, FastAPI, SQL. Build APIs for internal tooling.",
+                    employment_type="Internship",
+                    url="https://example.com/backend-intern",
+                    source="Remotive",
+                    source_type="api",
+                ),
+                RawListingData(
+                    title="Backend Engineer Intern",
+                    company="Phoenix Apps",
+                    location="Hybrid - Phoenix, AZ",
+                    description="Required: Python, FastAPI, SQL. Build APIs for internal tooling.",
+                    employment_type="Internship",
+                    url="https://example.com/backend-intern",
+                    source="RemoteOK",
+                    source_type="api",
+                ),
+            ],
+            statuses=[
+                ProviderFetchStatus(provider="Remotive", source_type="api", status="ok", fetched_count=1),
+                ProviderFetchStatus(provider="RemoteOK", source_type="api", status="ok", fetched_count=1),
+            ],
+            query_terms=["backend engineer intern", "python backend engineer"],
         )
+
+    async def fake_collect(_target):
+        return fake_collect_live_listings(_target)
+
+    monkeypatch.setattr("app.copilot.workflow.collect_live_listings", fake_collect)
+
+    import_response = test_client.post(
+        "/api/imports",
+        json={
+            "format": "json",
+            "content": """
+            [
+              {
+                "title": "Platform Engineer Intern",
+                "company": "Infra Labs",
+                "location": "Remote",
+                "description": "Required: Python, SQL, Docker. Build backend platform tooling.",
+                "employment_type": "Internship",
+                "url": "https://example.com/platform-intern"
+              }
+            ]
+            """,
+        },
     )
+    assert import_response.status_code == 200
 
-    assert any("Seattle" in location or "Washington" in location for location in candidate.preferred_locations)
-    assert any(region in job.location_regions for region in ["Chicago, IL", "Illinois"])
+    run_response = test_client.post("/api/search-runs", json={"refresh_action_plans": True})
+
+    assert run_response.status_code == 200
+    payload = run_response.json()
+    assert payload["run"]["diagnostics"]["fetched_listings"] == 3
+    assert payload["run"]["diagnostics"]["deduped_opportunities"] == 2
+    assert {item["provider"] for item in payload["run"]["provider_statuses"]} == {"Remotive", "RemoteOK", "Imports"}
+    assert payload["results"][0]["assessment"]["triage_decision"] in {"apply", "tailor"}
+    assert payload["results"][0]["action_plan"] is not None
 
 
-def test_score_calibration_keeps_plausible_adjacent_matches_out_of_low_30s() -> None:
-    candidate = build_candidate_profile(
-        "resume.txt",
-        """
-        Python developer building FastAPI tools, SQL dashboards, and Dockerized APIs.
-        Built internal platform services and developer tooling projects.
-        2 years experience.
-        """
+def test_feedback_changes_future_ranking_for_similar_opportunities(client, monkeypatch) -> None:
+    test_client, _ = client
+    _save_default_profile(test_client)
+
+    async def fake_collect(_target):
+        return OrchestratedListings(
+            listings=[
+                RawListingData(
+                    title="Backend Engineer Intern",
+                    company="Phoenix Apps",
+                    location="Remote",
+                    description="Required: Python, FastAPI, SQL. Build APIs for internal tools and product teams.",
+                    employment_type="Internship",
+                    url="https://example.com/job-a",
+                    source="Remotive",
+                    source_type="api",
+                ),
+                RawListingData(
+                    title="Platform Engineer Intern",
+                    company="Desert Infra",
+                    location="Remote",
+                    description="Required: Python, FastAPI, SQL, Docker. Build backend platform services, APIs, and tooling.",
+                    employment_type="Internship",
+                    url="https://example.com/job-b",
+                    source="Remotive",
+                    source_type="api",
+                ),
+            ],
+            statuses=[ProviderFetchStatus(provider="Remotive", source_type="api", status="ok", fetched_count=2)],
+            query_terms=["backend engineer intern", "platform engineer intern"],
+        )
+
+    monkeypatch.setattr("app.copilot.workflow.collect_live_listings", fake_collect)
+
+    first_run = test_client.post("/api/search-runs", json={})
+    first_payload = first_run.json()
+    assert first_payload["results"][0]["opportunity"]["title"] == "Backend Engineer Intern"
+
+    feedback = test_client.post(
+        f"/api/opportunities/{first_payload['results'][0]['opportunity']['id']}/feedback",
+        json={"run_id": first_payload["run"]["id"], "label": "wrong_stack"},
     )
-    preferences = CandidatePreferenceInput(
-        target_roles=["backend engineer"],
-        must_have_skills=["Python", "FastAPI", "SQL"],
-        search_mode="broad_recall",
-    )
-    jobs = [
-        normalize_job(
-            JobRecord(
-                title="Software Engineer Intern",
-                company="Fit Co",
-                location="Remote",
-                description="Build backend APIs with Python, SQL, Docker, and internal tooling.",
-                employment_type="Internship",
-                source="Fixture",
-            )
-        ),
-        normalize_job(
-            JobRecord(
-                title="Senior Sales Engineer",
-                company="Noise Corp",
-                location="Remote",
-                description="Required: presentations, quota ownership, account management, 7+ years experience.",
-                employment_type="Full-time",
-                source="Fixture",
-            )
-        ),
-    ]
-    response = analyze_search_results(
-        candidate=candidate,
-        preferences=preferences,
-        jobs=jobs,
-        search_plan=SearchPlan(
-            exact_role_queries=["backend engineer intern"],
-            adjacent_role_queries=["software engineer intern"],
-            stack_queries=["Python backend engineer"],
-            title_synonyms=["python developer"],
-            widened_role_queries=["backend developer", "api engineer"],
-            excluded_roles=[],
-            combined_queries=["backend engineer intern", "software engineer intern", "Python backend engineer"],
-            search_mode="broad_recall",
-            active_filters=[],
-        ),
-        provider_statuses=[
-            ProviderStatus(provider="Fixture", status="ok", fetched_jobs=2, normalized_jobs=2, freshness="fixture", source_quality=0.8),
-        ],
-    )
+    assert feedback.status_code == 200
+    assert feedback.json()["saved"] is True
 
-    assert response.matches[0].job.title == "Software Engineer Intern"
-    assert response.matches[0].score >= 46
+    second_run = test_client.post("/api/search-runs", json={})
+    second_payload = second_run.json()
 
-
-def test_saved_regression_case_returns_broader_ranked_set() -> None:
-    result = evaluate_saved_search_case(
-        Path(__file__).resolve().parents[1] / "app" / "data" / "regression_saved_search_case.json"
-    )
-
-    assert result["jobs_after_funnel"] >= 10
-    assert result["top_5_role_hits"] >= 3
+    assert second_payload["results"][0]["opportunity"]["title"] == "Platform Engineer Intern"

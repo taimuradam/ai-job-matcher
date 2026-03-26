@@ -11,5 +11,8 @@ htmlcov/
 .venv/
 venv/
 env/
+.env
+frontend/node_modules/
+app/data/copilot.sqlite3
 
 .DS_Store
