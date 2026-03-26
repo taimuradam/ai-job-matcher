@@ -9,56 +9,159 @@
   <body>
     <div class="shell">
       <header class="topbar">
-        <div>
-          <h1>{{ app_title }}</h1>
-          <p>
-            Upload your resume and the app will find live jobs that fit it,
-            then score each role with clear match reasoning and skill-gap guidance.
-          </p>
+        <div class="topbar-inner">
+          <div>
+            <h1>{{ app_title }}</h1>
+            <p>
+              Upload a resume, review the draft profile the app inferred, then
+              search for better-fit early-career jobs with transparent ranking.
+            </p>
+          </div>
+          <div class="header-note">
+            <strong>Flow</strong>
+            <span>Upload, review, search, refine.</span>
+          </div>
         </div>
       </header>
 
       <main class="layout">
         <section class="panel controls">
-          <form id="analyze-form">
+          <section class="control-section">
+            <h2>1. Upload resume</h2>
+            <p class="section-copy">
+              Start with your resume. The app will draft roles, skills, seniority,
+              and search preferences from it.
+            </p>
+            <form id="profile-form">
+              <div class="field-group">
+                <label for="resume">Resume file</label>
+                <input id="resume" name="resume" type="file" accept=".txt,.md,.doc,.docx,.rtf,.pdf" required />
+                <p class="field-note">
+                  TXT works immediately. DOCX uses macOS text conversion. PDF works when
+                  <code>pypdf</code> is installed.
+                </p>
+              </div>
+
+              <button id="extract-button" type="submit">Extract draft profile</button>
+            </form>
+          </section>
+
+          <section id="review-panel" class="control-section" hidden>
+            <h2>2. Review search intent</h2>
+            <p class="section-copy">
+              The app drafts these settings from your resume, but this step controls
+              the search quality more than any single score tweak.
+            </p>
+
+            <div id="profile-draft" class="draft-panel"></div>
+
             <div class="field-group">
-              <label for="resume">Resume file</label>
-              <input id="resume" name="resume" type="file" accept=".txt,.md,.doc,.docx,.rtf,.pdf" required />
-              <p class="field-note">
-                TXT works immediately. DOCX uses macOS text conversion. PDF works when
-                <code>pypdf</code> is installed. No job description upload is required.
-              </p>
+              <label for="target-roles">Target roles</label>
+              <textarea id="target-roles" rows="3"></textarea>
+              <p class="field-note">Use commas or new lines. Keep the roles you actively want first.</p>
+              <label class="toggle-row">
+                <input id="confirm-target-roles" type="checkbox" />
+                <span>Treat these roles as a hard search preference</span>
+              </label>
             </div>
 
-            <button id="submit-button" type="submit">Analyze matches</button>
-          </form>
+            <div class="field-group">
+              <label for="preferred-locations">Preferred locations</label>
+              <textarea id="preferred-locations" rows="2"></textarea>
+              <label class="toggle-row">
+                <input id="confirm-preferred-locations" type="checkbox" />
+                <span>Use locations as a hard filter</span>
+              </label>
+            </div>
+
+            <div class="field-group">
+              <label for="must-have-skills">Must-have stack</label>
+              <textarea id="must-have-skills" rows="2"></textarea>
+              <label class="toggle-row">
+                <input id="confirm-must-have-skills" type="checkbox" />
+                <span>Favor these skills strongly during matching</span>
+              </label>
+            </div>
+
+            <div class="field-group">
+              <label for="excluded-roles">Roles to exclude</label>
+              <textarea id="excluded-roles" rows="2"></textarea>
+            </div>
+
+            <div class="field-grid">
+              <div class="field-group">
+                <label for="remote-preference">Remote preference</label>
+                <select id="remote-preference">
+                  <option value="remote_or_hybrid">Remote or hybrid</option>
+                  <option value="hybrid_or_remote">Hybrid first</option>
+                  <option value="onsite_friendly">Onsite friendly</option>
+                </select>
+                <label class="toggle-row">
+                  <input id="confirm-remote-preference" type="checkbox" />
+                  <span>Use work mode as a hard filter</span>
+                </label>
+              </div>
+
+              <div class="field-group">
+                <label for="employment-preferences">Employment preference</label>
+                <textarea id="employment-preferences" rows="2"></textarea>
+                <label class="toggle-row">
+                  <input id="confirm-employment-preferences" type="checkbox" />
+                  <span>Use employment type as a hard filter</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label for="search-mode">Search mode</label>
+              <select id="search-mode">
+                <option value="broad_recall">Broader recall</option>
+                <option value="balanced">Balanced</option>
+                <option value="high_precision">High precision</option>
+              </select>
+              <p class="field-note">Broader recall keeps more plausible jobs for ranking instead of dropping them early.</p>
+            </div>
+
+            <button id="search-button" type="button">Find best-fit jobs</button>
+          </section>
         </section>
 
         <section class="panel results">
           <div id="status-card" class="status-card">
             <p id="status-text">
-              Upload a resume and the app will fetch matching jobs from live public job feeds.
+              Upload a resume to draft a candidate profile before the app searches live job feeds.
             </p>
           </div>
 
           <div id="results" class="results-hidden">
             <section class="section-block">
               <div class="section-head">
-                <h2>Resume snapshot</h2>
+                <h2>Candidate profile</h2>
+                <p id="session-badge" class="section-meta"></p>
               </div>
-              <div id="resume-summary" class="summary-grid"></div>
+              <div id="profile-summary" class="summary-grid"></div>
             </section>
 
             <section class="section-block">
               <div class="section-head">
-                <h2>What to work on next</h2>
+                <h2>Search strategy</h2>
               </div>
-              <div id="insights-summary" class="insight-grid"></div>
+              <div id="search-summary" class="summary-grid"></div>
             </section>
 
             <section class="section-block">
               <div class="section-head">
                 <h2>Ranked role matches</h2>
+                <div class="toolbar">
+                  <label class="toolbar-label" for="result-view">View</label>
+                  <select id="result-view">
+                    <option value="balanced">Exact-fit first</option>
+                    <option value="discovery">Broader discovery</option>
+                    <option value="remote">Remote only</option>
+                    <option value="newest">Newest first</option>
+                    <option value="growth">Highest growth potential</option>
+                  </select>
+                </div>
               </div>
               <div id="matches-list" class="matches-list"></div>
             </section>

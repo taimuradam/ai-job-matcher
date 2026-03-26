@@ -1,0 +1,189 @@
+{
+  "name": "taimur_recall_regression",
+  "resume_filename": "taimur_resume.txt",
+  "resume_text": "Taimur Adam\nPython developer building FastAPI tools for job analysis. Projects include SQL dashboards, Dockerized APIs, pandas data analysis, scikit-learn prototypes, and LLM workflow experiments using OpenAI APIs. Built backend services, internal developer tools, and evaluation loops through internships and projects. Based in Phoenix, Arizona and open to remote or hybrid early-career software roles.",
+  "preferences": {
+    "target_roles": ["backend engineer"],
+    "preferred_locations": ["Phoenix, AZ"],
+    "remote_preference": "remote_or_hybrid",
+    "employment_preferences": ["internship", "full_time"],
+    "must_have_skills": ["Python", "FastAPI", "SQL"],
+    "excluded_roles": [],
+    "search_mode": "broad_recall",
+    "confirmed_preferences": {}
+  },
+  "expected_top_titles": [
+    "backend engineer",
+    "software engineer",
+    "platform engineer",
+    "api engineer",
+    "full stack"
+  ],
+  "jobs": [
+    {
+      "title": "Backend Engineer Intern",
+      "company": "Northline Systems",
+      "location": "Remote - United States",
+      "description": "Required: Python, FastAPI, SQL, Docker. Build backend APIs and internal services for product teams.",
+      "employment_type": "Internship",
+      "url": "https://example.com/regression/backend-intern",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-22T12:00:00+00:00"
+    },
+    {
+      "title": "Software Engineer Intern",
+      "company": "Desert Apps",
+      "location": "Hybrid - Phoenix, AZ",
+      "description": "Build product features with Python, SQL, REST APIs, Git, and internal tooling. Internship role for early-career engineers.",
+      "employment_type": "Internship",
+      "url": "https://example.com/regression/software-intern",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-23T12:00:00+00:00"
+    },
+    {
+      "title": "Backend Platform Intern",
+      "company": "Mesa Infra",
+      "location": "Hybrid - Tempe, AZ",
+      "description": "Required: Python, Docker, APIs, SQL. Help build platform services and internal developer tools.",
+      "employment_type": "Internship",
+      "url": "https://example.com/regression/platform-intern",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-21T12:00:00+00:00"
+    },
+    {
+      "title": "Junior Backend Engineer",
+      "company": "Sunline Data",
+      "location": "Remote",
+      "description": "Experience with Python, FastAPI, SQL, Docker, and API integrations required. Nice to have AWS.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/junior-backend",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-24T12:00:00+00:00"
+    },
+    {
+      "title": "API Engineer",
+      "company": "Orbit Sync",
+      "location": "Remote",
+      "description": "Build API integrations with Python, REST APIs, FastAPI, SQL, and Git. Great role for engineers with shipped projects.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/api-engineer",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-20T12:00:00+00:00"
+    },
+    {
+      "title": "Product Engineer",
+      "company": "Signal Forge",
+      "location": "Remote",
+      "description": "Own user-facing workflows with Python services, SQL, React, and internal APIs. Early-career friendly team.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/product-engineer",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-20T18:00:00+00:00"
+    },
+    {
+      "title": "Full Stack Engineer I",
+      "company": "Copper Labs",
+      "location": "Hybrid - Phoenix, AZ",
+      "description": "Required: JavaScript, React, Python, SQL, REST APIs. Build internal dashboards and backend APIs.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/full-stack",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-19T12:00:00+00:00"
+    },
+    {
+      "title": "Platform Engineer I",
+      "company": "Canyon Cloud",
+      "location": "Remote",
+      "description": "Work on CI/CD, Docker, AWS, Python scripts, and internal platform services. 1-3 years experience.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/platform-i",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-18T12:00:00+00:00"
+    },
+    {
+      "title": "Data Analyst Intern",
+      "company": "Atlas Metrics",
+      "location": "Tempe, AZ",
+      "description": "Analyze applicant funnel and hiring data with SQL, Python, Pandas, data visualization tools, and experimentation.",
+      "employment_type": "Internship",
+      "url": "https://example.com/regression/data-analyst",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-18T17:00:00+00:00"
+    },
+    {
+      "title": "AI Engineer Intern",
+      "company": "Model Harbor",
+      "location": "Remote",
+      "description": "Prototype LLM workflows using Python, OpenAI API, RAG, evaluation loops, and FastAPI services.",
+      "employment_type": "Internship",
+      "url": "https://example.com/regression/ai-intern",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-24T08:00:00+00:00"
+    },
+    {
+      "title": "Analytics Engineer",
+      "company": "Metric Bloom",
+      "location": "Remote - US",
+      "description": "Build SQL models, Python ETL, dashboards, and reporting pipelines. Nice to have experimentation experience.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/analytics-engineer",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-17T12:00:00+00:00"
+    },
+    {
+      "title": "Backend Developer",
+      "company": "Ridge Commerce",
+      "location": "Remote",
+      "description": "Support backend applications with Python, PostgreSQL, APIs, Git, and Docker.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/backend-developer",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-22T07:00:00+00:00"
+    },
+    {
+      "title": "DevOps Engineer",
+      "company": "Harbor Ops",
+      "location": "Remote",
+      "description": "Required: AWS, Docker, CI/CD, Terraform, Python. Build deployment workflows for engineering teams.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/devops",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-16T12:00:00+00:00"
+    },
+    {
+      "title": "Senior Frontend Engineer",
+      "company": "Interface Co",
+      "location": "Remote",
+      "description": "Required: React, TypeScript, leadership, architecture, 6+ years experience.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/senior-frontend",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-15T12:00:00+00:00"
+    },
+    {
+      "title": "Senior Account Executive",
+      "company": "Sales Group",
+      "location": "Remote",
+      "description": "Required: enterprise pipeline management, quota ownership, 7+ years closing experience.",
+      "employment_type": "Full-time",
+      "url": "https://example.com/regression/account-exec",
+      "source": "Snapshot",
+      "source_type": "fixture",
+      "published_at": "2026-03-14T12:00:00+00:00"
+    }
+  ]
+}

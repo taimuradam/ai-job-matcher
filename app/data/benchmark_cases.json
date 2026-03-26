@@ -1,0 +1,140 @@
+[
+  {
+    "name": "backend_early_career",
+    "resume_filename": "backend_resume.txt",
+    "resume_text": "Python developer building FastAPI tools, SQL dashboards, and Dockerized APIs. Built backend services for student projects and completed a software engineering internship. 2 years experience.",
+    "preferences": {
+      "target_roles": ["backend engineer"],
+      "must_have_skills": ["Python", "FastAPI", "SQL"],
+      "remote_preference": "remote_or_hybrid"
+    },
+    "expected_top_titles": ["backend engineer intern", "junior backend engineer"],
+    "jobs": [
+      {
+        "title": "Backend Engineer Intern",
+        "company": "Example Systems",
+        "location": "Remote - United States",
+        "description": "Required: Python, FastAPI, SQL, Docker. Build backend APIs and internal services for product teams.",
+        "employment_type": "Internship",
+        "url": "https://example.com/backend-intern",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-20T12:00:00+00:00"
+      },
+      {
+        "title": "Junior Backend Engineer",
+        "company": "Platform Labs",
+        "location": "Hybrid - Phoenix, AZ",
+        "description": "Experience with Python, APIs, SQL, and Docker required. Nice to have AWS and CI/CD.",
+        "employment_type": "Full-time",
+        "url": "https://example.com/junior-backend",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-18T12:00:00+00:00"
+      },
+      {
+        "title": "Senior Frontend Engineer",
+        "company": "Interface Co",
+        "location": "Remote",
+        "description": "Required: React, TypeScript, leadership, architecture, 6+ years experience.",
+        "employment_type": "Full-time",
+        "url": "https://example.com/senior-frontend",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-17T12:00:00+00:00"
+      }
+    ]
+  },
+  {
+    "name": "data_profile",
+    "resume_filename": "data_resume.txt",
+    "resume_text": "Data analyst with SQL, pandas, dashboard work, experimentation analysis, and stakeholder reporting. Built reporting pipelines and Power BI dashboards in coursework and internships.",
+    "preferences": {
+      "target_roles": ["data analyst"],
+      "must_have_skills": ["SQL", "Pandas", "Data Analysis"],
+      "remote_preference": "remote_or_hybrid"
+    },
+    "expected_top_titles": ["data analyst", "product analyst"],
+    "jobs": [
+      {
+        "title": "Data Analyst",
+        "company": "Insight Labs",
+        "location": "Remote",
+        "description": "Required: SQL, pandas, analytics, dashboarding. Build reports and partner with product teams.",
+        "employment_type": "Full-time",
+        "url": "https://example.com/data-analyst",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-21T12:00:00+00:00"
+      },
+      {
+        "title": "Product Analyst",
+        "company": "Growth Signals",
+        "location": "Hybrid - United States",
+        "description": "Preferred: A/B testing, SQL, experimentation, dashboards, stakeholder communication.",
+        "employment_type": "Full-time",
+        "url": "https://example.com/product-analyst",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-19T12:00:00+00:00"
+      },
+      {
+        "title": "Senior DevOps Engineer",
+        "company": "Infra Corp",
+        "location": "Remote",
+        "description": "Required: Kubernetes, Terraform, AWS, CI/CD, 5+ years experience.",
+        "employment_type": "Full-time",
+        "url": "https://example.com/devops",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-18T12:00:00+00:00"
+      }
+    ]
+  },
+  {
+    "name": "ml_profile",
+    "resume_filename": "ml_resume.txt",
+    "resume_text": "Machine learning student building NLP and RAG demos with Python, scikit-learn, PyTorch, and OpenAI APIs. Published chatbot and model evaluation projects. Looking for remote AI internships.",
+    "preferences": {
+      "target_roles": ["machine learning engineer"],
+      "must_have_skills": ["Python", "Machine Learning", "OpenAI API"],
+      "remote_preference": "remote_or_hybrid"
+    },
+    "expected_top_titles": ["machine learning engineer", "ai engineer"],
+    "jobs": [
+      {
+        "title": "Machine Learning Engineer Intern",
+        "company": "Model Works",
+        "location": "Remote",
+        "description": "Required: Python, machine learning, scikit-learn, experimentation. Bonus: NLP and PyTorch.",
+        "employment_type": "Internship",
+        "url": "https://example.com/ml-intern",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-22T12:00:00+00:00"
+      },
+      {
+        "title": "AI Engineer Intern",
+        "company": "Applied AI Co",
+        "location": "Remote",
+        "description": "Required: Python, OpenAI API, RAG, prompt engineering. Build AI workflows and evaluation loops.",
+        "employment_type": "Internship",
+        "url": "https://example.com/ai-intern",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-20T12:00:00+00:00"
+      },
+      {
+        "title": "Senior Account Executive",
+        "company": "Sales Group",
+        "location": "Remote",
+        "description": "Required: enterprise pipeline management, quota ownership, 7+ years closing experience.",
+        "employment_type": "Full-time",
+        "url": "https://example.com/account-executive",
+        "source": "Benchmark",
+        "source_type": "fixture",
+        "published_at": "2026-03-18T12:00:00+00:00"
+      }
+    ]
+  }
+]
