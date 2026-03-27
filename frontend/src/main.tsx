@@ -127,6 +127,9 @@ type OpportunityData = {
   required_skills: string[];
   preferred_skills: string[];
   domain_tags: string[];
+  salary_range?: string | null;
+  visa_support?: string | null;
+  employment_type?: string | null;
   published_at?: string | null;
   job_age_days?: number | null;
   apply_url?: string | null;
@@ -247,6 +250,24 @@ const initialState: AppState = {
   importContent: ""
 };
 
+const remotePreferenceOptions = [
+  { value: "remote_or_hybrid", label: "Remote or hybrid" },
+  { value: "hybrid_or_remote", label: "Hybrid or remote" },
+  { value: "onsite_friendly", label: "Onsite friendly" }
+];
+
+const workModeOptions = [
+  { value: "remote", label: "Remote" },
+  { value: "hybrid", label: "Hybrid" },
+  { value: "onsite", label: "Onsite" }
+];
+
+const seniorityOptions = [
+  { value: "entry-level", label: "Entry-level" },
+  { value: "mid-level", label: "Mid-level" },
+  { value: "senior", label: "Senior" }
+];
+
 function listToText(items: string[]): string {
   return items.join("\n");
 }
@@ -256,6 +277,19 @@ function textToList(value: string): string[] {
     .split(/\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function toggleListValue(items: string[], value: string, checked: boolean): string[] {
+  if (checked) {
+    return items.includes(value) ? items : [...items, value];
+  }
+  return items.filter((item) => item !== value);
+}
+
+function formatVisaSupport(value?: string | null): string {
+  if (value === "available") return "Visa support available";
+  if (value === "not available") return "No visa support";
+  return "Visa support not specified";
 }
 
 function decisionTone(decision: FitAssessmentData["triage_decision"]): string {
@@ -439,6 +473,27 @@ function App() {
     }
   }
 
+  async function handleResetWorkspace() {
+    setState((current) => ({ ...current, busy: "reset-workspace", error: null, notice: null }));
+    try {
+      const response = await fetch("/api/workspace", { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error("Could not reset the workspace.");
+      }
+      setState((current) => ({
+        ...initialState,
+        workspaceLoading: false,
+        notice: "Workspace reset. Old saved profiles, targets, imports, and runs were cleared."
+      }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        busy: null,
+        error: error instanceof Error ? error.message : "Could not reset the workspace."
+      }));
+    }
+  }
+
   async function submitFeedback(label: string) {
     if (!selectedResult || !state.run) return;
     setState((current) => ({ ...current, busy: "feedback", error: null, notice: null }));
@@ -456,7 +511,7 @@ function App() {
         ...current,
         busy: null,
         run: refreshed,
-        notice: `Saved feedback: ${label.replaceAll("_", " ")}.`
+        notice: `Saved feedback: ${label.replace(/_/g, " ")}.`
       }));
     } catch (error) {
       setState((current) => ({
@@ -522,6 +577,9 @@ function App() {
         <div className="header-meta">
           <span className="meta-pill">{state.savedProfile ? `Profile v${state.savedProfile.version}` : "No saved profile"}</span>
           <span className="meta-pill">{state.run ? `${state.run.results.length} ranked jobs` : "No run yet"}</span>
+          <button type="button" onClick={handleResetWorkspace} disabled={state.busy === "reset-workspace"}>
+            {state.busy === "reset-workspace" ? "Resetting..." : "Reset workspace"}
+          </button>
         </div>
       </header>
 
@@ -582,6 +640,29 @@ function App() {
                     onChange={(event) => updateDraftProfile("preferred_locations", textToList(event.target.value))}
                   />
                 </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Remote preference</span>
+                    <select
+                      value={state.draftProfile.remote_preference}
+                      onChange={(event) => updateDraftProfile("remote_preference", event.target.value)}
+                    >
+                      {remotePreferenceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Employment preferences</span>
+                    <textarea
+                      rows={3}
+                      value={listToText(state.draftProfile.employment_preferences)}
+                      onChange={(event) => updateDraftProfile("employment_preferences", textToList(event.target.value))}
+                    />
+                  </label>
+                </div>
                 <div className="evidence-list">
                   {(state.draftProfile.evidence || []).slice(0, 4).map((item) => (
                     <article key={item.label + item.detail} className="evidence-item">
@@ -631,6 +712,45 @@ function App() {
                 </label>
                 <div className="field-grid">
                   <label className="field">
+                    <span>Preferred locations</span>
+                    <textarea
+                      rows={3}
+                      value={listToText(state.draftTarget.preferred_locations)}
+                      onChange={(event) => updateDraftTarget("preferred_locations", textToList(event.target.value))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Employment preferences</span>
+                    <textarea
+                      rows={3}
+                      value={listToText(state.draftTarget.employment_preferences)}
+                      onChange={(event) => updateDraftTarget("employment_preferences", textToList(event.target.value))}
+                    />
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Work modes</span>
+                  <div className="check-grid">
+                    {workModeOptions.map((option) => (
+                      <label key={option.value}>
+                        <input
+                          type="checkbox"
+                          checked={state.draftTarget!.work_modes.includes(option.value)}
+                          onChange={(event) =>
+                            updateDraftTarget(
+                              "work_modes",
+                              toggleListValue(state.draftTarget!.work_modes, option.value, event.target.checked)
+                            )
+                          }
+                        />
+                        {" "}
+                        {option.label}
+                      </label>
+                    ))}
+                  </div>
+                </label>
+                <div className="field-grid">
+                  <label className="field">
                     <span>Must-have skills</span>
                     <textarea
                       rows={3}
@@ -647,6 +767,19 @@ function App() {
                     />
                   </label>
                 </div>
+                <label className="field">
+                  <span>Seniority ceiling</span>
+                  <select
+                    value={state.draftTarget.seniority_ceiling}
+                    onChange={(event) => updateDraftTarget("seniority_ceiling", event.target.value)}
+                  >
+                    {seniorityOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <div className="check-grid">
                   <label><input type="checkbox" checked={state.draftTarget.strict_location} onChange={(event) => updateDraftTarget("strict_location", event.target.checked)} /> Strict location</label>
                   <label><input type="checkbox" checked={state.draftTarget.strict_work_mode} onChange={(event) => updateDraftTarget("strict_work_mode", event.target.checked)} /> Strict work mode</label>
@@ -654,9 +787,9 @@ function App() {
                   <label><input type="checkbox" checked={state.draftTarget.strict_must_have} onChange={(event) => updateDraftTarget("strict_must_have", event.target.checked)} /> Strict must-haves</label>
                 </div>
                 <div className="check-grid">
-                  <label><input type="checkbox" checked={state.draftTarget.providers.remotive} onChange={(event) => updateDraftTarget("providers", { ...state.draftTarget.providers, remotive: event.target.checked })} /> Remotive</label>
-                  <label><input type="checkbox" checked={state.draftTarget.providers.remoteok} onChange={(event) => updateDraftTarget("providers", { ...state.draftTarget.providers, remoteok: event.target.checked })} /> RemoteOK</label>
-                  <label><input type="checkbox" checked={state.draftTarget.providers.imports} onChange={(event) => updateDraftTarget("providers", { ...state.draftTarget.providers, imports: event.target.checked })} /> Imports</label>
+                  <label><input type="checkbox" checked={state.draftTarget!.providers.remotive} onChange={(event) => updateDraftTarget("providers", { ...state.draftTarget!.providers, remotive: event.target.checked })} /> Remotive</label>
+                  <label><input type="checkbox" checked={state.draftTarget!.providers.remoteok} onChange={(event) => updateDraftTarget("providers", { ...state.draftTarget!.providers, remoteok: event.target.checked })} /> RemoteOK</label>
+                  <label><input type="checkbox" checked={state.draftTarget!.providers.imports} onChange={(event) => updateDraftTarget("providers", { ...state.draftTarget!.providers, imports: event.target.checked })} /> Imports</label>
                 </div>
               </div>
             ) : (
@@ -780,6 +913,17 @@ function App() {
                 </div>
 
                 <section className="detail-section">
+                  <h4>Life fit</h4>
+                  <div className="chip-row">
+                    <span className="chip">{selectedResult.opportunity.location_type}</span>
+                    <span className="chip">{selectedResult.opportunity.seniority_band}</span>
+                    <span className="chip">{selectedResult.opportunity.employment_type || "Employment not specified"}</span>
+                    <span className="chip">{selectedResult.opportunity.salary_range || "Salary not listed"}</span>
+                    <span className="chip">{formatVisaSupport(selectedResult.opportunity.visa_support)}</span>
+                  </div>
+                </section>
+
+                <section className="detail-section">
                   <h4>Assessment</h4>
                   {selectedResult.assessment.eligible ? (
                     <ul>
@@ -827,7 +971,7 @@ function App() {
                 <div className="feedback-bar">
                   {["apply", "tailor", "monitor", "skip", "wrong_stack", "wrong_location", "too_senior"].map((label) => (
                     <button key={label} type="button" className="feedback-button" onClick={() => void submitFeedback(label)}>
-                      {label.replaceAll("_", " ")}
+                      {label.replace(/_/g, " ")}
                     </button>
                   ))}
                 </div>

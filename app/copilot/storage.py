@@ -739,3 +739,19 @@ class SQLiteStore:
             imports=self.list_import_batches(),
             latest_run=latest_run,
         )
+
+    def reset_workspace(self) -> None:
+        with self._connect() as connection:
+            connection.executescript(
+                """
+                DELETE FROM action_plans;
+                DELETE FROM feedback_events;
+                DELETE FROM fit_assessments;
+                DELETE FROM opportunities;
+                DELETE FROM search_runs;
+                DELETE FROM raw_listings;
+                DELETE FROM imports;
+                DELETE FROM targets;
+                DELETE FROM profiles;
+                """
+            )

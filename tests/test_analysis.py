@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.services.taxonomy import extract_location_mentions, extract_years_of_experience
+
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -99,3 +101,66 @@ def test_profile_save_persists_versioned_profile_and_target(client) -> None:
     workspace = test_client.get("/api/workspace").json()
     assert workspace["profile"]["profile"]["skills_confirmed"] == ["Python", "FastAPI", "SQL"]
     assert workspace["target"]["target"]["target_roles"] == ["backend engineer"]
+
+
+def test_workspace_reset_clears_saved_state(client) -> None:
+    test_client, _ = client
+    profile_payload = {
+        "profile": {
+            "filename": "resume.txt",
+            "summary": "Targeting backend internships.",
+            "skills_confirmed": ["Python", "FastAPI", "SQL"],
+            "skills_inferred": [],
+            "core_roles": ["backend engineer"],
+            "adjacent_roles": ["software engineer"],
+            "seniority": "early-career",
+            "industries": [],
+            "preferred_locations": ["Brisbane"],
+            "remote_preference": "remote_or_hybrid",
+            "employment_preferences": ["internship"],
+            "education_level": ["Bachelor's"],
+            "years_experience": 1,
+            "projects": [],
+            "evidence": [],
+            "confidence": {"core_roles": 0.8},
+            "signals": [],
+            "llm_summary": "Targeting backend internships."
+        }
+    }
+
+    save_response = test_client.put("/api/profile", json=profile_payload)
+    assert save_response.status_code == 200
+
+    reset_response = test_client.delete("/api/workspace")
+    assert reset_response.status_code == 204
+
+    workspace = test_client.get("/api/workspace").json()
+    assert workspace["profile"] is None
+    assert workspace["target"] is None
+    assert workspace["latest_run"] is None
+    assert workspace["imports"] == []
+
+
+def test_location_extraction_ignores_common_words_that_match_state_codes() -> None:
+    text = """
+    Based in Brisbane and looking for remote or hybrid software roles.
+    Interested in backend work or AI product roles.
+    """
+
+    locations = extract_location_mentions(text)
+
+    assert "Indiana" not in locations
+    assert "Oregon" not in locations
+
+
+def test_year_extraction_ignores_education_years_without_work_experience_context() -> None:
+    text = """
+    Bachelor of Computer Science
+    University of Somewhere
+    2022 - 2026
+    Projects: Built Python and FastAPI applications.
+    """
+
+    years = extract_years_of_experience(text)
+
+    assert years is None
