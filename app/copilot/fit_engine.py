@@ -64,6 +64,26 @@ def _matches_employment(target: SearchTargetData, opportunity: OpportunityData) 
     return any(normalize_text(item).replace("_", " ") in combined for item in target.employment_preferences)
 
 
+def _employment_adjustment(target: SearchTargetData, opportunity: OpportunityData) -> tuple[int, list[str]]:
+    if not target.employment_preferences:
+        return 0, []
+    if _matches_employment(target, opportunity):
+        return 0, ["Employment type aligns with the current target."]
+
+    combined = normalize_text(
+        " ".join(
+            [
+                opportunity.employment_type or "",
+                opportunity.title,
+                opportunity.description_text,
+            ]
+        )
+    )
+    if combined:
+        return -6, ["Employment type is outside the target you configured."]
+    return -3, ["Employment type is unclear, so the opportunity is harder to trust."]
+
+
 def _role_score(target: SearchTargetData, opportunity: OpportunityData) -> tuple[int, list[str]]:
     title_text = normalize_text(f"{opportunity.title} {opportunity.normalized_title}")
     signals: list[str] = []
@@ -260,6 +280,7 @@ def assess_opportunity(
     evidence_score, evidence = _evidence_score(profile, opportunity)
     freshness_score = _freshness_score(opportunity)
     source_score = _source_quality_score(opportunity)
+    employment_adjustment, employment_reasons = _employment_adjustment(target, opportunity)
     feedback_score = _feedback_adjustment(opportunity, feedback_events)
     eligible, ineligibility_reasons = _eligible(
         profile,
@@ -280,6 +301,7 @@ def assess_opportunity(
             + evidence_score
             + freshness_score
             + source_score
+            + employment_adjustment
             + feedback_score,
         ),
     )
@@ -289,10 +311,14 @@ def assess_opportunity(
         risks.append(f"Missing requirements: {', '.join(missing_skills[:3])}.")
     if not evidence:
         risks.append("The job description has limited overlap with existing project evidence.")
+    if employment_adjustment < 0:
+        risks.extend(employment_reasons)
     explanation = [
         f"Role alignment {role_score}/30 and skills alignment {skills_score}/25 are driving the current fit.",
         f"Seniority {seniority_score}/15, location {location_score}/10, evidence {evidence_score}/10, freshness {freshness_score}/5, source quality {source_score}/5.",
     ]
+    if employment_reasons:
+        explanation.append(employment_reasons[0])
     if feedback_score:
         explanation.append(f"Feedback history adjusted the score by {feedback_score}.")
     return FitAssessmentData(

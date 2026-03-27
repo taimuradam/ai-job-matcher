@@ -24505,11 +24505,37 @@ var initialState = {
   importFormat: "json",
   importContent: ""
 };
+var remotePreferenceOptions = [
+  { value: "remote_or_hybrid", label: "Remote or hybrid" },
+  { value: "hybrid_or_remote", label: "Hybrid or remote" },
+  { value: "onsite_friendly", label: "Onsite friendly" }
+];
+var workModeOptions = [
+  { value: "remote", label: "Remote" },
+  { value: "hybrid", label: "Hybrid" },
+  { value: "onsite", label: "Onsite" }
+];
+var seniorityOptions = [
+  { value: "entry-level", label: "Entry-level" },
+  { value: "mid-level", label: "Mid-level" },
+  { value: "senior", label: "Senior" }
+];
 function listToText(items) {
   return items.join("\n");
 }
 function textToList(value) {
   return value.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+}
+function toggleListValue(items, value, checked) {
+  if (checked) {
+    return items.includes(value) ? items : [...items, value];
+  }
+  return items.filter((item) => item !== value);
+}
+function formatVisaSupport(value) {
+  if (value === "available") return "Visa support available";
+  if (value === "not available") return "No visa support";
+  return "Visa support not specified";
 }
 function decisionTone(decision) {
   switch (decision) {
@@ -24680,6 +24706,26 @@ function App() {
       }));
     }
   }
+  async function handleResetWorkspace() {
+    setState((current) => ({ ...current, busy: "reset-workspace", error: null, notice: null }));
+    try {
+      const response = await fetch("/api/workspace", { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error("Could not reset the workspace.");
+      }
+      setState((current) => ({
+        ...initialState,
+        workspaceLoading: false,
+        notice: "Workspace reset. Old saved profiles, targets, imports, and runs were cleared."
+      }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        busy: null,
+        error: error instanceof Error ? error.message : "Could not reset the workspace."
+      }));
+    }
+  }
   async function submitFeedback(label) {
     if (!selectedResult || !state.run) return;
     setState((current) => ({ ...current, busy: "feedback", error: null, notice: null }));
@@ -24697,7 +24743,7 @@ function App() {
         ...current,
         busy: null,
         run: refreshed,
-        notice: `Saved feedback: ${label.replaceAll("_", " ")}.`
+        notice: `Saved feedback: ${label.replace(/_/g, " ")}.`
       }));
     } catch (error) {
       setState((current) => ({
@@ -24754,7 +24800,8 @@ function App() {
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "header-meta", children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "meta-pill", children: state.savedProfile ? `Profile v${state.savedProfile.version}` : "No saved profile" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "meta-pill", children: state.run ? `${state.run.results.length} ranked jobs` : "No run yet" })
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "meta-pill", children: state.run ? `${state.run.results.length} ranked jobs` : "No run yet" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: handleResetWorkspace, disabled: state.busy === "reset-workspace", children: state.busy === "reset-workspace" ? "Resetting..." : "Reset workspace" })
       ] })
     ] }),
     (state.error || state.notice) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: `banner ${state.error ? "banner-error" : "banner-success"}`, children: state.error || state.notice }),
@@ -24820,6 +24867,30 @@ function App() {
                 }
               )
             ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Remote preference" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "select",
+                  {
+                    value: state.draftProfile.remote_preference,
+                    onChange: (event) => updateDraftProfile("remote_preference", event.target.value),
+                    children: remotePreferenceOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: option.value, children: option.label }, option.value))
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Employment preferences" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "textarea",
+                  {
+                    rows: 3,
+                    value: listToText(state.draftProfile.employment_preferences),
+                    onChange: (event) => updateDraftProfile("employment_preferences", textToList(event.target.value))
+                  }
+                )
+              ] })
+            ] }),
             /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "evidence-list", children: (state.draftProfile.evidence || []).slice(0, 4).map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { className: "evidence-item", children: [
               /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: item.label }),
               /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: item.detail })
@@ -24867,6 +24938,48 @@ function App() {
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
               /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Preferred locations" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "textarea",
+                  {
+                    rows: 3,
+                    value: listToText(state.draftTarget.preferred_locations),
+                    onChange: (event) => updateDraftTarget("preferred_locations", textToList(event.target.value))
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Employment preferences" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "textarea",
+                  {
+                    rows: 3,
+                    value: listToText(state.draftTarget.employment_preferences),
+                    onChange: (event) => updateDraftTarget("employment_preferences", textToList(event.target.value))
+                  }
+                )
+              ] })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Work modes" }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "check-grid", children: workModeOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "input",
+                  {
+                    type: "checkbox",
+                    checked: state.draftTarget.work_modes.includes(option.value),
+                    onChange: (event) => updateDraftTarget(
+                      "work_modes",
+                      toggleListValue(state.draftTarget.work_modes, option.value, event.target.checked)
+                    )
+                  }
+                ),
+                " ",
+                option.label
+              ] }, option.value)) })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
                 /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Must-have skills" }),
                 /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
                   "textarea",
@@ -24888,6 +25001,17 @@ function App() {
                   }
                 )
               ] })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Seniority ceiling" }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                "select",
+                {
+                  value: state.draftTarget.seniority_ceiling,
+                  onChange: (event) => updateDraftTarget("seniority_ceiling", event.target.value),
+                  children: seniorityOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: option.value, children: option.label }, option.value))
+                }
+              )
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "check-grid", children: [
               /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
@@ -25049,6 +25173,16 @@ function App() {
               ] })
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Life fit" }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "chip-row", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.location_type }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.seniority_band }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.employment_type || "Employment not specified" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.salary_range || "Salary not listed" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: formatVisaSupport(selectedResult.opportunity.visa_support) })
+              ] })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
               /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Assessment" }),
               selectedResult.assessment.eligible ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.assessment.matched_signals.concat(selectedResult.assessment.explanation).map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.assessment.ineligibility_reasons.map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) })
             ] }),
@@ -25064,7 +25198,7 @@ function App() {
                 /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.action_plan.resume_tailoring_steps.map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) })
               ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No action plan yet. Apply or tailor candidates get one automatically." })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "feedback-bar", children: ["apply", "tailor", "monitor", "skip", "wrong_stack", "wrong_location", "too_senior"].map((label) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "feedback-button", onClick: () => void submitFeedback(label), children: label.replaceAll("_", " ") }, label)) }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "feedback-bar", children: ["apply", "tailor", "monitor", "skip", "wrong_stack", "wrong_location", "too_senior"].map((label) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "feedback-button", onClick: () => void submitFeedback(label), children: label.replace(/_/g, " ") }, label)) }),
             selectedResult.opportunity.apply_url && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: "apply-link", href: selectedResult.opportunity.apply_url, target: "_blank", rel: "noreferrer", children: "Open listing" })
           ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "Select an opportunity from the inbox to inspect the fit and action plan." })
         ] }),

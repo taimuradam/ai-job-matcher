@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -75,6 +75,12 @@ async def index(request: Request) -> HTMLResponse:
 @app.get("/api/workspace", response_model=WorkspaceSnapshotResponse)
 async def workspace(request: Request) -> WorkspaceSnapshotResponse:
     return get_store(request).workspace_snapshot()
+
+
+@app.delete("/api/workspace", status_code=204, response_class=Response)
+async def reset_workspace(request: Request) -> Response:
+    get_store(request).reset_workspace()
+    return Response(status_code=204)
 
 
 @app.post("/api/profile/ingest")

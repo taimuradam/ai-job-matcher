@@ -300,14 +300,35 @@ def extract_years_of_experience(text: str) -> float | None:
     if explicit_years:
         return float(max(explicit_years))
 
-    year_values = [
-        int(match.group(0))
-        for match in re.finditer(r"\b(20\d{2}|19\d{2})\b", normalized)
-    ]
     current_year = datetime.now().year
-    plausible_years = [year for year in year_values if 1995 <= year <= current_year]
-    if plausible_years:
-        return float(max(current_year - min(plausible_years), 0))
+    experience_markers = {
+        "experience",
+        "employment",
+        "work history",
+        "intern",
+        "engineer",
+        "developer",
+        "analyst",
+        "consultant",
+        "manager",
+        "founder",
+    }
+    ranged_durations: list[int] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        lowered = normalize_text(stripped)
+        if not any(marker in lowered for marker in experience_markers):
+            continue
+        for match in re.finditer(r"\b(19\d{2}|20\d{2})\s*[-–]\s*(present|current|now|19\d{2}|20\d{2})\b", lowered):
+            start_year = int(match.group(1))
+            end_token = match.group(2)
+            end_year = current_year if end_token in {"present", "current", "now"} else int(end_token)
+            if 1995 <= start_year <= current_year and start_year <= end_year <= current_year:
+                ranged_durations.append(end_year - start_year)
+    if ranged_durations:
+        return float(max(ranged_durations))
     return None
 
 
@@ -409,7 +430,7 @@ def extract_location_mentions(text: str, *, limit: int = 5) -> list[str]:
     locations.extend(city_state_matches)
 
     for abbreviation, state_name in STATE_ABBREVIATIONS.items():
-        if re.search(rf"(?<![a-z]){re.escape(abbreviation)}(?![a-z])", normalized):
+        if re.search(rf"(?<![A-Z]){re.escape(abbreviation.upper())}(?![A-Z])", text):
             locations.append(state_name.title())
         if state_name in normalized:
             locations.append(state_name.title())
