@@ -194,6 +194,11 @@ class SQLiteStore:
             "Unsupported opportunities table schema. Delete app/data/copilot.sqlite3 to recreate it."
         )
 
+    def reset(self) -> None:
+        if self.db_path.exists():
+            self.db_path.unlink()
+        self.initialize()
+
     def _next_version(self, table: str, record_id: str) -> int:
         with self._connect() as connection:
             row = connection.execute(
