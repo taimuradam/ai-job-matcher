@@ -24512,7 +24512,11 @@ var stepLabels = [
   { step: 4, title: "Review Jobs", eyebrow: "Step 4" }
 ];
 var remotePreferenceOptions = [
+<<<<<<< HEAD
   { value: "remote_only", label: "Remote only" },
+=======
+  { value: "unspecified", label: "Not specified in resume" },
+>>>>>>> 84282ba992ace7a30c3cf6eb94899883f26c762e
   { value: "remote_or_hybrid", label: "Remote or hybrid" },
   { value: "hybrid_only", label: "Hybrid only" },
   { value: "onsite_ok", label: "Onsite is okay" }

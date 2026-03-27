@@ -50,7 +50,7 @@ class CandidateProfileData(BaseModel):
     seniority: str = "early-career"
     industries: list[str] = Field(default_factory=list)
     preferred_locations: list[str] = Field(default_factory=list)
-    remote_preference: str = "remote_or_hybrid"
+    remote_preference: str = "unspecified"
     employment_preferences: list[str] = Field(default_factory=list)
     education_level: list[str] = Field(default_factory=list)
     years_experience: float | None = None

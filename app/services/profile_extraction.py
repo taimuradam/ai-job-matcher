@@ -38,7 +38,7 @@ def _infer_roles(skills: list[str], text: str) -> tuple[list[str], list[str], di
             confidences[role] = min(0.35 + score / 5.0, 0.94)
 
     ranked = [role for role, _ in sorted(role_scores, key=lambda item: item[1], reverse=True)]
-    core_roles = ranked[:3] or ["software engineer"]
+    core_roles = ranked[:3]
 
     adjacent_roles: list[str] = []
     for role in core_roles:
@@ -79,7 +79,7 @@ def _infer_remote_preference(text: str) -> tuple[str, float]:
         return "hybrid_or_remote", 0.72
     if "remote" in normalized:
         return "remote_or_hybrid", 0.76
-    return "remote_or_hybrid", 0.48
+    return "unspecified", 0.35
 
 
 def _infer_locations(text: str) -> list[str]:
@@ -107,12 +107,6 @@ def _infer_employment_preferences(text: str, seniority: str) -> list[str]:
         preferences.append("contract")
     if "full-time" in normalized or "full time" in normalized:
         preferences.append("full_time")
-
-    if not preferences:
-        if seniority == "early-career":
-            preferences = ["internship", "new_grad", "full_time"]
-        else:
-            preferences = ["full_time"]
     return dedupe_preserve_order(preferences)
 
 

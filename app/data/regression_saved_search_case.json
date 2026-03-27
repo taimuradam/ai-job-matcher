@@ -1,10 +1,10 @@
 {
-  "name": "taimur_recall_regression",
-  "resume_filename": "taimur_resume.txt",
-  "resume_text": "Taimur Adam\nPython developer building FastAPI tools for job analysis. Projects include SQL dashboards, Dockerized APIs, pandas data analysis, scikit-learn prototypes, and LLM workflow experiments using OpenAI APIs. Built backend services, internal developer tools, and evaluation loops through internships and projects. Based in Phoenix, Arizona and open to remote or hybrid early-career software roles.",
+  "name": "generic_backend_recall_regression",
+  "resume_filename": "candidate_resume.txt",
+  "resume_text": "Candidate Example\nPython developer building FastAPI tools for job analysis. Projects include SQL dashboards, Dockerized APIs, pandas data analysis, scikit-learn prototypes, and LLM workflow experiments using OpenAI APIs. Built backend services, internal developer tools, and evaluation loops through internships and projects. Open to remote or hybrid early-career software roles in the United States.",
   "preferences": {
     "target_roles": ["backend engineer"],
-    "preferred_locations": ["Phoenix, AZ"],
+    "preferred_locations": ["United States"],
     "remote_preference": "remote_or_hybrid",
     "employment_preferences": ["internship", "full_time"],
     "must_have_skills": ["Python", "FastAPI", "SQL"],
@@ -33,8 +33,8 @@
     },
     {
       "title": "Software Engineer Intern",
-      "company": "Desert Apps",
-      "location": "Hybrid - Phoenix, AZ",
+      "company": "Harbor Apps",
+      "location": "Hybrid - Chicago, IL",
       "description": "Build product features with Python, SQL, REST APIs, Git, and internal tooling. Internship role for early-career engineers.",
       "employment_type": "Internship",
       "url": "https://example.com/regression/software-intern",
@@ -44,8 +44,8 @@
     },
     {
       "title": "Backend Platform Intern",
-      "company": "Mesa Infra",
-      "location": "Hybrid - Tempe, AZ",
+      "company": "Northfield Infra",
+      "location": "Hybrid - Denver, CO",
       "description": "Required: Python, Docker, APIs, SQL. Help build platform services and internal developer tools.",
       "employment_type": "Internship",
       "url": "https://example.com/regression/platform-intern",
@@ -89,7 +89,7 @@
     {
       "title": "Full Stack Engineer I",
       "company": "Copper Labs",
-      "location": "Hybrid - Phoenix, AZ",
+      "location": "Hybrid - Seattle, WA",
       "description": "Required: JavaScript, React, Python, SQL, REST APIs. Build internal dashboards and backend APIs.",
       "employment_type": "Full-time",
       "url": "https://example.com/regression/full-stack",
@@ -111,7 +111,7 @@
     {
       "title": "Data Analyst Intern",
       "company": "Atlas Metrics",
-      "location": "Tempe, AZ",
+      "location": "Chicago, IL",
       "description": "Analyze applicant funnel and hiring data with SQL, Python, Pandas, data visualization tools, and experimentation.",
       "employment_type": "Internship",
       "url": "https://example.com/regression/data-analyst",
