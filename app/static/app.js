@@ -1111,7 +1111,7 @@ var require_react_development = __commonJS({
           var dispatcher = resolveDispatcher();
           return dispatcher.useCallback(callback, deps);
         }
-        function useMemo(create, deps) {
+        function useMemo2(create, deps) {
           var dispatcher = resolveDispatcher();
           return dispatcher.useMemo(create, deps);
         }
@@ -1883,7 +1883,7 @@ var require_react_development = __commonJS({
         exports.useImperativeHandle = useImperativeHandle;
         exports.useInsertionEffect = useInsertionEffect;
         exports.useLayoutEffect = useLayoutEffect;
-        exports.useMemo = useMemo;
+        exports.useMemo = useMemo2;
         exports.useReducer = useReducer;
         exports.useRef = useRef;
         exports.useState = useState2;
@@ -24496,19 +24496,26 @@ var initialState = {
   notice: null,
   draftProfile: null,
   draftTarget: null,
-  llmStatus: null,
   savedProfile: null,
   savedTarget: null,
+  llmStatus: null,
   imports: [],
   run: null,
   selectedOpportunityId: null,
   importFormat: "json",
   importContent: ""
 };
+var stepLabels = [
+  { step: 1, title: "Upload Resume", eyebrow: "Step 1" },
+  { step: 2, title: "Confirm Details", eyebrow: "Step 2" },
+  { step: 3, title: "Run Search", eyebrow: "Step 3" },
+  { step: 4, title: "Review Jobs", eyebrow: "Step 4" }
+];
 var remotePreferenceOptions = [
+  { value: "remote_only", label: "Remote only" },
   { value: "remote_or_hybrid", label: "Remote or hybrid" },
-  { value: "hybrid_or_remote", label: "Hybrid or remote" },
-  { value: "onsite_friendly", label: "Onsite friendly" }
+  { value: "hybrid_only", label: "Hybrid only" },
+  { value: "onsite_ok", label: "Onsite is okay" }
 ];
 var workModeOptions = [
   { value: "remote", label: "Remote" },
@@ -24516,9 +24523,19 @@ var workModeOptions = [
   { value: "onsite", label: "Onsite" }
 ];
 var seniorityOptions = [
+  { value: "intern", label: "Intern" },
   { value: "entry-level", label: "Entry-level" },
   { value: "mid-level", label: "Mid-level" },
   { value: "senior", label: "Senior" }
+];
+var feedbackOptions = [
+  "apply",
+  "tailor",
+  "monitor",
+  "skip",
+  "wrong_stack",
+  "wrong_location",
+  "too_senior"
 ];
 function listToText(items) {
   return items.join("\n");
@@ -24551,18 +24568,47 @@ function decisionTone(decision) {
 }
 async function jsonFetch(input, init) {
   const response = await fetch(input, init);
-  const payload = await response.json();
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    throw new Error(payload.detail || "Request failed.");
+    const detail = payload && typeof payload === "object" && "detail" in payload ? payload.detail : null;
+    throw new Error(typeof detail === "string" ? detail : "Request failed.");
   }
   return payload;
 }
+function formatTimestamp(value) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+function previousStep(step) {
+  if (step === 4) return 3;
+  if (step === 3) return 2;
+  if (step === 2) return 1;
+  return 1;
+}
+function nextStep(step) {
+  if (step === 1) return 2;
+  if (step === 2) return 3;
+  if (step === 3) return 4;
+  return 4;
+}
 function App() {
   const [state, setState] = (0, import_react.useState)(initialState);
+  const [currentStep, setCurrentStep] = (0, import_react.useState)(1);
   (0, import_react.useEffect)(() => {
     void (async () => {
       try {
         const workspace = await jsonFetch("/api/workspace");
+        let step = 1;
+        if (workspace.latest_run) {
+          step = 4;
+        } else if (workspace.profile && workspace.target) {
+          step = 3;
+        } else if (workspace.profile || workspace.target) {
+          step = 2;
+        }
         setState((current) => ({
           ...current,
           workspaceLoading: false,
@@ -24575,6 +24621,7 @@ function App() {
           run: workspace.latest_run ?? null,
           selectedOpportunityId: workspace.latest_run?.results[0]?.opportunity.id ?? null
         }));
+        setCurrentStep(step);
       } catch (error) {
         setState((current) => ({
           ...current,
@@ -24584,7 +24631,27 @@ function App() {
       }
     })();
   }, []);
-  const selectedResult = state.run?.results.find((item) => item.opportunity.id === state.selectedOpportunityId) ?? state.run?.results[0] ?? null;
+  const selectedResult = (0, import_react.useMemo)(() => {
+    return state.run?.results.find((item) => item.opportunity.id === state.selectedOpportunityId) ?? state.run?.results[0] ?? null;
+  }, [state.run, state.selectedOpportunityId]);
+  const maxUnlockedStep = (0, import_react.useMemo)(() => {
+    if (state.run) return 4;
+    if (state.savedProfile && state.savedTarget) return 3;
+    if (state.draftProfile && state.draftTarget) return 2;
+    return 1;
+  }, [state.draftProfile, state.draftTarget, state.savedProfile, state.savedTarget, state.run]);
+  function goToStep(step) {
+    if (step <= maxUnlockedStep) {
+      setCurrentStep(step);
+    }
+  }
+  function goNext() {
+    const candidate = nextStep(currentStep);
+    setCurrentStep(candidate <= maxUnlockedStep ? candidate : currentStep);
+  }
+  function goBack() {
+    setCurrentStep(previousStep(currentStep));
+  }
   async function handleResumeIngest(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -24601,17 +24668,21 @@ function App() {
       });
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload.detail || "Could not ingest the resume.");
+        throw new Error(
+          typeof payload === "object" && payload && "detail" in payload ? payload.detail || "Could not ingest the resume." : "Could not ingest the resume."
+        );
       }
+      const parsed = payload;
       setState((current) => ({
         ...current,
         busy: null,
-        draftProfile: payload.profile,
-        draftTarget: payload.suggested_target,
-        llmStatus: payload.llm_status,
-        notice: "Draft profile ingested. Review it, save it, then run search.",
-        error: null
+        draftProfile: parsed.profile,
+        draftTarget: parsed.suggested_target,
+        llmStatus: parsed.llm_status,
+        error: null,
+        notice: "Resume uploaded. Please confirm your details before saving."
       }));
+      setCurrentStep(2);
       form.reset();
     } catch (error) {
       setState((current) => ({
@@ -24642,9 +24713,10 @@ function App() {
         busy: null,
         savedProfile: payload.profile,
         savedTarget: payload.target,
-        notice: `Saved profile v${payload.profile.version} and target v${payload.target.version}.`,
+        notice: `Details saved. Profile v${payload.profile.version} and target v${payload.target.version} are ready for search.`,
         error: null
       }));
+      setCurrentStep(3);
     } catch (error) {
       setState((current) => ({
         ...current,
@@ -24668,6 +24740,7 @@ function App() {
         selectedOpportunityId: payload.results[0]?.opportunity.id ?? null,
         notice: `Completed search run ${payload.run.id.slice(0, 8)} with ${payload.results.length} ranked opportunities.`
       }));
+      setCurrentStep(4);
     } catch (error) {
       setState((current) => ({
         ...current,
@@ -24713,11 +24786,12 @@ function App() {
       if (!response.ok) {
         throw new Error("Could not reset the workspace.");
       }
-      setState((current) => ({
+      setState({
         ...initialState,
         workspaceLoading: false,
         notice: "Workspace reset. Old saved profiles, targets, imports, and runs were cleared."
-      }));
+      });
+      setCurrentStep(1);
     } catch (error) {
       setState((current) => ({
         ...current,
@@ -24738,7 +24812,9 @@ function App() {
           label
         })
       });
-      const refreshed = await jsonFetch("/api/search-runs/" + state.run.run.id);
+      const refreshed = await jsonFetch(
+        "/api/search-runs/" + state.run.run.id
+      );
       setState((current) => ({
         ...current,
         busy: null,
@@ -24765,7 +24841,9 @@ function App() {
           force_refresh: true
         })
       });
-      const refreshed = await jsonFetch("/api/search-runs/" + state.run.run.id);
+      const refreshed = await jsonFetch(
+        "/api/search-runs/" + state.run.run.id
+      );
       setState((current) => ({
         ...current,
         busy: null,
@@ -24783,457 +24861,726 @@ function App() {
   function updateDraftProfile(key, value) {
     setState((current) => ({
       ...current,
-      draftProfile: current.draftProfile ? { ...current.draftProfile, [key]: value } : current.draftProfile
+      draftProfile: current.draftProfile ? { ...current.draftProfile, [key]: value } : null
     }));
   }
   function updateDraftTarget(key, value) {
     setState((current) => ({
       ...current,
-      draftTarget: current.draftTarget ? { ...current.draftTarget, [key]: value } : current.draftTarget
+      draftTarget: current.draftTarget ? { ...current.draftTarget, [key]: value } : null
     }));
   }
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "app-shell", children: [
     /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { className: "app-header", children: [
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { children: "Job Search Copilot" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "Ingest a resume, lock the target, run search across live and imported listings, then decide what deserves an application." })
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "eyebrow", children: "Personal Job Wizard" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { children: "Find jobs that actually fit your life." }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "header-copy", children: "The flow now starts with your resume, then moves into confirmation, search setup, and final review one screen at a time." })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "header-meta", children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "meta-pill", children: state.savedProfile ? `Profile v${state.savedProfile.version}` : "No saved profile" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "meta-pill", children: state.run ? `${state.run.results.length} ranked jobs` : "No run yet" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: handleResetWorkspace, disabled: state.busy === "reset-workspace", children: state.busy === "reset-workspace" ? "Resetting..." : "Reset workspace" })
-      ] })
-    ] }),
-    (state.error || state.notice) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: `banner ${state.error ? "banner-error" : "banner-success"}`, children: state.error || state.notice }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", { className: "workspace", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "column column-left", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Profile" }),
-            state.llmStatus && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "muted-text", children: [
-              "LLM: ",
-              state.llmStatus.mode
-            ] })
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", { onSubmit: handleResumeIngest, className: "stack", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Resume upload" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { name: "resume", type: "file", accept: ".txt,.md,.doc,.docx,.rtf,.pdf" })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "submit", disabled: state.busy === "ingest", children: state.busy === "ingest" ? "Ingesting..." : "Ingest resume" })
-          ] }),
-          state.draftProfile ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "stack", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Summary" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "textarea",
-                {
-                  rows: 3,
-                  value: state.draftProfile.summary || "",
-                  onChange: (event) => updateDraftProfile("summary", event.target.value)
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Target roles" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "textarea",
-                {
-                  rows: 3,
-                  value: listToText(state.draftProfile.core_roles),
-                  onChange: (event) => updateDraftProfile("core_roles", textToList(event.target.value))
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Confirmed skills" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "textarea",
-                {
-                  rows: 4,
-                  value: listToText(state.draftProfile.skills_confirmed),
-                  onChange: (event) => updateDraftProfile("skills_confirmed", textToList(event.target.value))
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Preferred locations" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "textarea",
-                {
-                  rows: 3,
-                  value: listToText(state.draftProfile.preferred_locations),
-                  onChange: (event) => updateDraftProfile("preferred_locations", textToList(event.target.value))
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Remote preference" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                  "select",
-                  {
-                    value: state.draftProfile.remote_preference,
-                    onChange: (event) => updateDraftProfile("remote_preference", event.target.value),
-                    children: remotePreferenceOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: option.value, children: option.label }, option.value))
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Employment preferences" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                  "textarea",
-                  {
-                    rows: 3,
-                    value: listToText(state.draftProfile.employment_preferences),
-                    onChange: (event) => updateDraftProfile("employment_preferences", textToList(event.target.value))
-                  }
-                )
-              ] })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "evidence-list", children: (state.draftProfile.evidence || []).slice(0, 4).map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { className: "evidence-item", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: item.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: item.detail })
-            ] }, item.label + item.detail)) })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No profile draft yet. Upload a resume to start." })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Targets" }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: handleSaveProfile, disabled: !state.draftProfile || !state.draftTarget || state.busy === "save-profile", children: state.busy === "save-profile" ? "Saving..." : "Save profile + target" })
-          ] }),
-          state.draftTarget ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "stack", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Target roles" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "textarea",
-                {
-                  rows: 3,
-                  value: listToText(state.draftTarget.target_roles),
-                  onChange: (event) => updateDraftTarget("target_roles", textToList(event.target.value))
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Role families" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "textarea",
-                {
-                  rows: 3,
-                  value: listToText(state.draftTarget.role_families),
-                  onChange: (event) => updateDraftTarget("role_families", textToList(event.target.value))
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Query terms" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "textarea",
-                {
-                  rows: 4,
-                  value: listToText(state.draftTarget.query_terms),
-                  onChange: (event) => updateDraftTarget("query_terms", textToList(event.target.value))
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Preferred locations" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                  "textarea",
-                  {
-                    rows: 3,
-                    value: listToText(state.draftTarget.preferred_locations),
-                    onChange: (event) => updateDraftTarget("preferred_locations", textToList(event.target.value))
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Employment preferences" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                  "textarea",
-                  {
-                    rows: 3,
-                    value: listToText(state.draftTarget.employment_preferences),
-                    onChange: (event) => updateDraftTarget("employment_preferences", textToList(event.target.value))
-                  }
-                )
-              ] })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Work modes" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "check-grid", children: workModeOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                  "input",
-                  {
-                    type: "checkbox",
-                    checked: state.draftTarget.work_modes.includes(option.value),
-                    onChange: (event) => updateDraftTarget(
-                      "work_modes",
-                      toggleListValue(state.draftTarget.work_modes, option.value, event.target.checked)
-                    )
-                  }
-                ),
-                " ",
-                option.label
-              ] }, option.value)) })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Must-have skills" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                  "textarea",
-                  {
-                    rows: 3,
-                    value: listToText(state.draftTarget.must_have_skills),
-                    onChange: (event) => updateDraftTarget("must_have_skills", textToList(event.target.value))
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Excluded keywords" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                  "textarea",
-                  {
-                    rows: 3,
-                    value: listToText(state.draftTarget.excluded_keywords),
-                    onChange: (event) => updateDraftTarget("excluded_keywords", textToList(event.target.value))
-                  }
-                )
-              ] })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Seniority ceiling" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "select",
-                {
-                  value: state.draftTarget.seniority_ceiling,
-                  onChange: (event) => updateDraftTarget("seniority_ceiling", event.target.value),
-                  children: seniorityOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: option.value, children: option.label }, option.value))
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "check-grid", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "checkbox", checked: state.draftTarget.strict_location, onChange: (event) => updateDraftTarget("strict_location", event.target.checked) }),
-                " Strict location"
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "checkbox", checked: state.draftTarget.strict_work_mode, onChange: (event) => updateDraftTarget("strict_work_mode", event.target.checked) }),
-                " Strict work mode"
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "checkbox", checked: state.draftTarget.strict_employment, onChange: (event) => updateDraftTarget("strict_employment", event.target.checked) }),
-                " Strict employment"
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "checkbox", checked: state.draftTarget.strict_must_have, onChange: (event) => updateDraftTarget("strict_must_have", event.target.checked) }),
-                " Strict must-haves"
-              ] })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "check-grid", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "checkbox", checked: state.draftTarget.providers.remotive, onChange: (event) => updateDraftTarget("providers", { ...state.draftTarget.providers, remotive: event.target.checked }) }),
-                " Remotive"
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "checkbox", checked: state.draftTarget.providers.remoteok, onChange: (event) => updateDraftTarget("providers", { ...state.draftTarget.providers, remoteok: event.target.checked }) }),
-                " RemoteOK"
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "checkbox", checked: state.draftTarget.providers.imports, onChange: (event) => updateDraftTarget("providers", { ...state.draftTarget.providers, imports: event.target.checked }) }),
-                " Imports"
-              ] })
-            ] })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "A suggested target appears after profile ingestion." })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Imports" }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: handleImport, disabled: state.busy === "import", children: state.busy === "import" ? "Importing..." : "Save import" })
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "stack", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Import format" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-                "select",
-                {
-                  value: state.importFormat,
-                  onChange: (event) => setState((current) => ({
-                    ...current,
-                    importFormat: event.target.value
-                  })),
-                  children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "json", children: "JSON" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "csv", children: "CSV" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "urls", children: "URL list" })
-                  ]
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Import content" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                "textarea",
-                {
-                  rows: 8,
-                  value: state.importContent,
-                  onChange: (event) => setState((current) => ({ ...current, importContent: event.target.value }))
-                }
-              )
-            ] })
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "import-list", children: state.imports.length ? state.imports.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "import-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: item.label }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-              item.item_count,
-              " items"
-            ] })
-          ] }, item.id)) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No saved imports yet." }) })
-        ] })
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("section", { className: "column column-center", children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel panel-stretch", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Inbox" }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: handleSearch, disabled: state.busy === "search" || !state.savedProfile || !state.savedTarget, children: state.busy === "search" ? "Running..." : "Run search" })
-        ] }),
-        state.workspaceLoading ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "Loading workspace..." }) : state.run?.results.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "result-list", children: state.run.results.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "meta-pill", children: state.run ? `${state.run.results.length} ranked jobs` : "No search run yet" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
           "button",
           {
             type: "button",
-            className: `result-row ${state.selectedOpportunityId === item.opportunity.id ? "result-row-active" : ""}`,
-            onClick: () => setState((current) => ({ ...current, selectedOpportunityId: item.opportunity.id })),
-            children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "result-row-top", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: item.opportunity.title }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: `decision decision-${decisionTone(item.assessment.triage_decision)}`, children: item.assessment.triage_decision })
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "result-row-meta", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: item.opportunity.company }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: item.opportunity.location }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-                  item.assessment.scores.total,
-                  "/100"
-                ] })
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: item.assessment.explanation[0] })
-            ]
-          },
-          item.opportunity.id
-        )) }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No ranked opportunities yet. Save a target and run search to populate the inbox." })
-      ] }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "column column-right", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel panel-stretch", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Detail" }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: refreshActionPlan, disabled: !selectedResult || state.busy === "action-plan", children: state.busy === "action-plan" ? "Refreshing..." : "Refresh action plan" })
+            onClick: handleResetWorkspace,
+            disabled: state.busy === "reset-workspace",
+            children: state.busy === "reset-workspace" ? "Resetting..." : "Reset workspace"
+          }
+        )
+      ] })
+    ] }),
+    (state.error || state.notice) && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: `banner ${state.error ? "banner-error" : "banner-success"}`, children: state.error || state.notice }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("nav", { className: "wizard-steps", "aria-label": "Wizard steps", children: stepLabels.map((item) => {
+      const locked = item.step > maxUnlockedStep;
+      const active = item.step === currentStep;
+      return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+        "button",
+        {
+          type: "button",
+          className: `wizard-step ${active ? "wizard-step-active" : ""} ${locked ? "wizard-step-locked" : ""}`,
+          disabled: locked,
+          onClick: () => goToStep(item.step),
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "wizard-step-index", children: item.eyebrow }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: item.title })
+          ]
+        },
+        item.step
+      );
+    }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", { className: "workspace wizard-layout", children: [
+      currentStep === 1 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel wizard-panel hero-panel", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header panel-header-stack", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Step 1" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Please upload your resume" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: "Start here. Once your resume is uploaded, the app will extract a draft profile and move you straight into the confirmation step." })
           ] }),
-          selectedResult ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "stack", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "detail-head", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: selectedResult.opportunity.title }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: [
-                  selectedResult.opportunity.company,
-                  " \xB7 ",
-                  selectedResult.opportunity.location,
-                  " \xB7 ",
-                  selectedResult.opportunity.source
-                ] })
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "score-box", children: selectedResult.assessment.scores.total })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "metric-grid", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Role" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
-                  selectedResult.assessment.scores.role_alignment,
-                  "/30"
-                ] })
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Skills" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
-                  selectedResult.assessment.scores.skills_alignment,
-                  "/25"
-                ] })
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Seniority" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
-                  selectedResult.assessment.scores.seniority_alignment,
-                  "/15"
-                ] })
-              ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Location" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
-                  selectedResult.assessment.scores.location_alignment,
-                  "/10"
-                ] })
-              ] })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Life fit" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "chip-row", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.location_type }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.seniority_band }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.employment_type || "Employment not specified" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.salary_range || "Salary not listed" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: formatVisaSupport(selectedResult.opportunity.visa_support) })
-              ] })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Assessment" }),
-              selectedResult.assessment.eligible ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.assessment.matched_signals.concat(selectedResult.assessment.explanation).map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.assessment.ineligibility_reasons.map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Gaps and risks" }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "chip-row", children: selectedResult.assessment.missing_requirements.length ? selectedResult.assessment.missing_requirements.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip chip-warning", children: item }, item)) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: "No major gaps surfaced" }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.assessment.risk_flags.map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Action plan" }),
-              selectedResult.action_plan ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: selectedResult.action_plan.summary }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.action_plan.resume_tailoring_steps.map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) })
-              ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No action plan yet. Apply or tailor candidates get one automatically." })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "feedback-bar", children: ["apply", "tailor", "monitor", "skip", "wrong_stack", "wrong_location", "too_senior"].map((label) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "feedback-button", onClick: () => void submitFeedback(label), children: label.replace(/_/g, " ") }, label)) }),
-            selectedResult.opportunity.apply_url && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: "apply-link", href: selectedResult.opportunity.apply_url, target: "_blank", rel: "noreferrer", children: "Open listing" })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "Select an opportunity from the inbox to inspect the fit and action plan." })
+          state.llmStatus && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "muted-text", children: [
+            "LLM mode: ",
+            state.llmStatus.mode
+          ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("details", { className: "panel details-panel", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("summary", { children: "Developer details" }),
-          state.run ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "stack", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "meta-table", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Fetched" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: state.run.run.diagnostics.fetched_listings })
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", { onSubmit: handleResumeIngest, className: "stack wizard-upload-form", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Resume upload" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { name: "resume", type: "file", accept: ".txt,.md,.doc,.docx,.rtf,.pdf" })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "wizard-actions wizard-actions-end", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "submit", disabled: state.busy === "ingest", children: state.busy === "ingest" ? "Uploading..." : "Upload resume" }) })
+        ] }),
+        state.draftProfile && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wizard-grid wizard-grid-two", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { className: "compact-card", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Draft ready" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: state.draftProfile.filename }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: state.draftProfile.summary || "A draft profile is ready for confirmation." })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { className: "compact-card", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Next screen" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Please confirm your details" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: "Review the extracted roles, skills, locations, and search target before saving." }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "wizard-actions wizard-actions-end", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: goNext, disabled: maxUnlockedStep < 2, children: "Next" }) })
+          ] })
+        ] })
+      ] }),
+      currentStep === 2 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel wizard-panel", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header panel-header-stack", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Step 2" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Please confirm your details" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: "Make sure the extracted profile is actually yours, then tighten the target so the search matches your real preferences." })
+          ] }),
+          state.savedProfile && state.savedTarget && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "muted-text", children: [
+            "Saved as profile v",
+            state.savedProfile.version,
+            " and target v",
+            state.savedTarget.version
+          ] })
+        ] }),
+        !state.draftProfile || !state.draftTarget ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "Upload a resume first so the app has something real to confirm." }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wizard-grid wizard-grid-two", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "stack", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Profile" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Who you are" })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Normalized" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: state.run.run.diagnostics.normalized_opportunities })
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Summary" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "textarea",
+                  {
+                    rows: 4,
+                    value: state.draftProfile.summary ?? "",
+                    onChange: (event) => updateDraftProfile("summary", event.target.value)
+                  }
+                )
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Deduped" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: state.run.run.diagnostics.deduped_opportunities })
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Target roles" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 5,
+                      value: listToText(state.draftProfile.core_roles),
+                      onChange: (event) => updateDraftProfile("core_roles", textToList(event.target.value))
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Confirmed skills" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 5,
+                      value: listToText(state.draftProfile.skills_confirmed),
+                      onChange: (event) => updateDraftProfile("skills_confirmed", textToList(event.target.value))
+                    }
+                  )
+                ] })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Eligible" }),
-                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: state.run.run.diagnostics.eligible_opportunities })
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Preferred locations" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 4,
+                      value: listToText(state.draftProfile.preferred_locations),
+                      onChange: (event) => updateDraftProfile(
+                        "preferred_locations",
+                        textToList(event.target.value)
+                      )
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Employment preferences" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 4,
+                      value: listToText(state.draftProfile.employment_preferences),
+                      onChange: (event) => updateDraftProfile(
+                        "employment_preferences",
+                        textToList(event.target.value)
+                      )
+                    }
+                  )
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Remote preference" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "select",
+                    {
+                      value: state.draftProfile.remote_preference,
+                      onChange: (event) => updateDraftProfile("remote_preference", event.target.value),
+                      children: remotePreferenceOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: option.value, children: option.label }, option.value))
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Resume snapshot" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: state.draftProfile.filename }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: state.draftProfile.years_experience !== null ? `${state.draftProfile.years_experience.toFixed(1)} years detected` : "No years of experience detected" }),
+                  state.llmStatus && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "muted-text", children: state.llmStatus.provider ? `${state.llmStatus.mode} via ${state.llmStatus.provider}` : state.llmStatus.mode })
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "stack", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Evidence" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Why the parser chose these details" })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "evidence-list", children: state.draftProfile.evidence.length ? state.draftProfile.evidence.slice(0, 6).map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { className: "evidence-item", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: item.label }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: item.detail })
+                ] }, item.label + item.detail)) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No evidence snippets were generated." }) })
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "chip-row", children: state.run.run.diagnostics.query_plan.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: item }, item)) }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: state.run.run.provider_statuses.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-              item.provider,
-              ": ",
-              item.status,
-              " \xB7 fetched ",
-              item.fetched_count,
-              " \xB7 normalized ",
-              item.normalized_count
-            ] }, item.provider)) })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No run diagnostics yet." })
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "stack", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Target" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "What you want" })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Target roles" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "textarea",
+                  {
+                    rows: 4,
+                    value: listToText(state.draftTarget.target_roles),
+                    onChange: (event) => updateDraftTarget("target_roles", textToList(event.target.value))
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Role families" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 4,
+                      value: listToText(state.draftTarget.role_families),
+                      onChange: (event) => updateDraftTarget("role_families", textToList(event.target.value))
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Query terms" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 4,
+                      value: listToText(state.draftTarget.query_terms),
+                      onChange: (event) => updateDraftTarget("query_terms", textToList(event.target.value))
+                    }
+                  )
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Preferred locations" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 4,
+                      value: listToText(state.draftTarget.preferred_locations),
+                      onChange: (event) => updateDraftTarget(
+                        "preferred_locations",
+                        textToList(event.target.value)
+                      )
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Employment preferences" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 4,
+                      value: listToText(state.draftTarget.employment_preferences),
+                      onChange: (event) => updateDraftTarget(
+                        "employment_preferences",
+                        textToList(event.target.value)
+                      )
+                    }
+                  )
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Work modes" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "check-grid", children: workModeOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: state.draftTarget.work_modes.includes(option.value),
+                      onChange: (event) => updateDraftTarget(
+                        "work_modes",
+                        toggleListValue(
+                          state.draftTarget.work_modes,
+                          option.value,
+                          event.target.checked
+                        )
+                      )
+                    }
+                  ),
+                  option.label
+                ] }, option.value)) })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "field-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Must-have skills" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 4,
+                      value: listToText(state.draftTarget.must_have_skills),
+                      onChange: (event) => updateDraftTarget("must_have_skills", textToList(event.target.value))
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Excluded keywords" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "textarea",
+                    {
+                      rows: 4,
+                      value: listToText(state.draftTarget.excluded_keywords),
+                      onChange: (event) => updateDraftTarget("excluded_keywords", textToList(event.target.value))
+                    }
+                  )
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Seniority ceiling" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "select",
+                  {
+                    value: state.draftTarget.seniority_ceiling,
+                    onChange: (event) => updateDraftTarget("seniority_ceiling", event.target.value),
+                    children: seniorityOptions.map((option) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: option.value, children: option.label }, option.value))
+                  }
+                )
+              ] })
+            ] })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wizard-actions", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: goBack, children: "Back" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+              "button",
+              {
+                type: "button",
+                onClick: handleSaveProfile,
+                disabled: state.busy === "save-profile",
+                children: state.busy === "save-profile" ? "Saving..." : "Save profile + target"
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: goNext, disabled: maxUnlockedStep < 3, children: "Next" })
+          ] })
+        ] })
+      ] }),
+      currentStep === 3 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel wizard-panel", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header panel-header-stack", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Step 3" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Run your search" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: "Choose how strict the filtering should be, decide which sources to include, add any imported jobs, and then run the search." })
+          ] }),
+          state.savedProfile && state.savedTarget && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "muted-text", children: [
+            "Ready with profile v",
+            state.savedProfile.version,
+            " and target v",
+            state.savedTarget.version
+          ] })
+        ] }),
+        !state.savedProfile || !state.savedTarget || !state.draftTarget ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "Save your confirmed profile and target first to unlock the search step." }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wizard-grid wizard-grid-two", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "stack", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Search rules" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "How strict should matching be?" })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "check-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: state.draftTarget.strict_location,
+                      onChange: (event) => updateDraftTarget("strict_location", event.target.checked)
+                    }
+                  ),
+                  "Strict location"
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: state.draftTarget.strict_work_mode,
+                      onChange: (event) => updateDraftTarget("strict_work_mode", event.target.checked)
+                    }
+                  ),
+                  "Strict work mode"
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: state.draftTarget.strict_employment,
+                      onChange: (event) => updateDraftTarget("strict_employment", event.target.checked)
+                    }
+                  ),
+                  "Strict employment"
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: state.draftTarget.strict_must_have,
+                      onChange: (event) => updateDraftTarget("strict_must_have", event.target.checked)
+                    }
+                  ),
+                  "Strict must-haves"
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Sources" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Where jobs should come from" })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "check-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: state.draftTarget.providers.remotive,
+                      onChange: (event) => updateDraftTarget("providers", {
+                        ...state.draftTarget.providers,
+                        remotive: event.target.checked
+                      })
+                    }
+                  ),
+                  "Remotive"
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: state.draftTarget.providers.remoteok,
+                      onChange: (event) => updateDraftTarget("providers", {
+                        ...state.draftTarget.providers,
+                        remoteok: event.target.checked
+                      })
+                    }
+                  ),
+                  "RemoteOK"
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: state.draftTarget.providers.imports,
+                      onChange: (event) => updateDraftTarget("providers", {
+                        ...state.draftTarget.providers,
+                        imports: event.target.checked
+                      })
+                    }
+                  ),
+                  "Imports"
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Search target" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Current focus" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: state.draftTarget.target_roles.join(", ") || "No target roles set yet." })
+              ] })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "stack", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Optional imports" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: "Add jobs from other places" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: "Paste listings from boards you trust if you want them ranked with the live feeds." })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Import format" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+                  "select",
+                  {
+                    value: state.importFormat,
+                    onChange: (event) => setState((current) => ({
+                      ...current,
+                      importFormat: event.target.value
+                    })),
+                    children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "json", children: "JSON" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "csv", children: "CSV" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "urls", children: "URL list" })
+                    ]
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", { className: "field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Import content" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                  "textarea",
+                  {
+                    rows: 10,
+                    value: state.importContent,
+                    onChange: (event) => setState((current) => ({ ...current, importContent: event.target.value }))
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "wizard-actions wizard-actions-end", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: handleImport, disabled: state.busy === "import", children: state.busy === "import" ? "Importing..." : "Save import" }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "import-list", children: state.imports.length ? state.imports.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "import-row", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: item.label }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+                  item.item_count,
+                  " items | ",
+                  item.format.toUpperCase(),
+                  " |",
+                  " ",
+                  formatTimestamp(item.created_at)
+                ] })
+              ] }, item.id)) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No saved imports yet." }) })
+            ] })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wizard-actions", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: goBack, children: "Back" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: handleSearch, disabled: state.busy === "search", children: state.busy === "search" ? "Running..." : "Run search" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: goNext, disabled: maxUnlockedStep < 4, children: "Next" })
+          ] })
+        ] })
+      ] }),
+      currentStep === 4 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "panel wizard-panel", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "panel-header panel-header-stack", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Step 4" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "Review your ranked jobs" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-copy", children: "Compare the top matches, inspect the fit and risks, and decide if a listing is actually worth your time." })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            "button",
+            {
+              type: "button",
+              onClick: refreshActionPlan,
+              disabled: !selectedResult || state.busy === "action-plan",
+              children: state.busy === "action-plan" ? "Refreshing..." : "Refresh action plan"
+            }
+          )
+        ] }),
+        !state.run?.results.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "Run a search first so there is a ranked list to review here." }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "wizard-grid wizard-grid-results", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "stack", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "compact-card", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "section-kicker", children: "Results" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", { children: [
+                  state.run.results.length,
+                  " jobs ranked for you"
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { className: "section-copy", children: [
+                  "Search run ",
+                  state.run.run.id.slice(0, 8),
+                  " created ",
+                  formatTimestamp(state.run.run.created_at)
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "result-list", children: state.run.results.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+                "button",
+                {
+                  type: "button",
+                  className: `result-row ${state.selectedOpportunityId === item.opportunity.id ? "result-row-active" : ""}`,
+                  onClick: () => setState((current) => ({
+                    ...current,
+                    selectedOpportunityId: item.opportunity.id
+                  })),
+                  children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "result-row-top", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: item.opportunity.title }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                        "span",
+                        {
+                          className: `decision decision-${decisionTone(
+                            item.assessment.triage_decision
+                          )}`,
+                          children: item.assessment.triage_decision
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "result-row-meta", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: item.opportunity.company }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: item.opportunity.location }),
+                      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+                        item.assessment.scores.total,
+                        "/100"
+                      ] })
+                    ] }),
+                    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: item.assessment.explanation[0] || "No explanation generated yet." })
+                  ]
+                },
+                item.opportunity.id
+              )) })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("section", { className: "stack", children: selectedResult ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "detail-head", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", { children: selectedResult.opportunity.title }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { children: [
+                    selectedResult.opportunity.company,
+                    " | ",
+                    selectedResult.opportunity.location,
+                    " |",
+                    " ",
+                    selectedResult.opportunity.source
+                  ] })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "score-box", children: selectedResult.assessment.scores.total })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "metric-grid", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Role" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
+                    selectedResult.assessment.scores.role_alignment,
+                    "/30"
+                  ] })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Skills" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
+                    selectedResult.assessment.scores.skills_alignment,
+                    "/25"
+                  ] })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Seniority" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
+                    selectedResult.assessment.scores.seniority_alignment,
+                    "/15"
+                  ] })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Location" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("strong", { children: [
+                    selectedResult.assessment.scores.location_alignment,
+                    "/10"
+                  ] })
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Life fit" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "chip-row", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.location_type }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.seniority_band }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.employment_type || "Employment not specified" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: selectedResult.opportunity.salary_range || "Salary not listed" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: formatVisaSupport(selectedResult.opportunity.visa_support) })
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Assessment" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: (selectedResult.assessment.eligible ? [
+                  ...selectedResult.assessment.matched_signals,
+                  ...selectedResult.assessment.explanation
+                ] : selectedResult.assessment.ineligibility_reasons).map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Gaps and risks" }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "chip-row", children: selectedResult.assessment.missing_requirements.length ? selectedResult.assessment.missing_requirements.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip chip-warning", children: item }, item)) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: "No major gaps surfaced" }) }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.assessment.risk_flags.length ? selectedResult.assessment.risk_flags.map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: "No significant risks were called out." }) })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "detail-section", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", { children: "Action plan" }),
+                selectedResult.action_plan ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: selectedResult.action_plan.summary }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: selectedResult.action_plan.resume_tailoring_steps.map((line) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("li", { children: line }, line)) })
+                ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "No action plan yet. Apply or tailor candidates get one automatically." })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "feedback-bar", children: feedbackOptions.map((label) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                "button",
+                {
+                  type: "button",
+                  className: "feedback-button",
+                  onClick: () => void submitFeedback(label),
+                  disabled: state.busy === "feedback",
+                  children: label.replace(/_/g, " ")
+                },
+                label
+              )) }),
+              selectedResult.opportunity.apply_url && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+                "a",
+                {
+                  className: "apply-link",
+                  href: selectedResult.opportunity.apply_url,
+                  target: "_blank",
+                  rel: "noreferrer",
+                  children: "Open listing"
+                }
+              )
+            ] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "empty-block", children: "Select a ranked opportunity to inspect the fit and action plan." }) })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("details", { className: "panel details-panel", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("summary", { children: "Developer details" }),
+            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "stack", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "meta-table", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Fetched" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: state.run.run.diagnostics.fetched_listings })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Normalized" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: state.run.run.diagnostics.normalized_opportunities })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Deduped" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: state.run.run.diagnostics.deduped_opportunities })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Eligible" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: state.run.run.diagnostics.eligible_opportunities })
+                ] })
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "chip-row", children: state.run.run.diagnostics.query_plan.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "chip", children: item }, item)) }),
+              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { children: state.run.run.provider_statuses.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+                item.provider,
+                ": ",
+                item.status,
+                " | fetched ",
+                item.fetched_count,
+                " | normalized",
+                " ",
+                item.normalized_count
+              ] }, item.provider)) })
+            ] })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "wizard-actions", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", onClick: goBack, children: "Back" }) })
         ] })
       ] })
     ] })
