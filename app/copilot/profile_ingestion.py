@@ -9,7 +9,7 @@ from app.services.profile_extraction import build_candidate_profile
 
 
 def _profile_summary(profile: CandidateProfileData) -> str:
-    roles = ", ".join(profile.core_roles[:2] or ["software engineer"])
+    roles = ", ".join(profile.core_roles[:2]) or "resume-derived roles still need confirmation"
     skills = ", ".join(profile.skills_confirmed[:4] or profile.skills_inferred[:4] or ["general engineering"])
     experience = (
         f"{profile.years_experience:.1f} years of experience"

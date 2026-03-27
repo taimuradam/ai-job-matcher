@@ -251,6 +251,7 @@ const initialState: AppState = {
 };
 
 const remotePreferenceOptions = [
+  { value: "unspecified", label: "Not specified in resume" },
   { value: "remote_or_hybrid", label: "Remote or hybrid" },
   { value: "hybrid_or_remote", label: "Hybrid or remote" },
   { value: "onsite_friendly", label: "Onsite friendly" }

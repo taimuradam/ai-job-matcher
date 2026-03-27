@@ -6,6 +6,8 @@ from app.services.taxonomy import dedupe_preserve_order, expand_role_aliases, no
 
 def _work_modes(remote_preference: str) -> list[str]:
     preference = normalize_text(remote_preference)
+    if preference in {"", "unspecified", "unknown", "none"}:
+        return []
     if preference == "onsite_friendly":
         return ["onsite", "hybrid", "remote"]
     if preference == "hybrid_or_remote":
@@ -37,13 +39,13 @@ def _role_query_variants(role: str, seniority: str) -> list[str]:
 
 
 def build_search_target(profile: CandidateProfileData) -> SearchTargetData:
-    target_roles = profile.core_roles[:3] or ["software engineer"]
+    target_roles = profile.core_roles[:3]
     role_families = dedupe_preserve_order(target_roles + profile.adjacent_roles[:4])
     query_terms: list[str] = []
     for role in role_families[:5]:
         for alias in expand_role_aliases(role):
             query_terms.extend(_role_query_variants(alias, profile.seniority))
-    if profile.skills_confirmed:
+    if profile.skills_confirmed and target_roles:
         query_terms.extend(
             f"{skill} {target_roles[0]}"
             for skill in profile.skills_confirmed[:3]

@@ -33,7 +33,7 @@ def test_profile_ingest_returns_draft_and_suggested_target(client) -> None:
     test_client, _ = client
     resume_text = """
     Backend-focused student building Python APIs with FastAPI and SQL.
-    Built Dockerized services and internal dashboards in Phoenix, Arizona.
+    Built Dockerized services and internal dashboards in Chicago, Illinois.
     Looking for remote or hybrid internships.
     """
 
@@ -61,7 +61,7 @@ def test_profile_save_persists_versioned_profile_and_target(client) -> None:
             "adjacent_roles": ["software engineer"],
             "seniority": "early-career",
             "industries": ["developer tools"],
-            "preferred_locations": ["Phoenix, AZ"],
+            "preferred_locations": ["Chicago, IL"],
             "remote_preference": "remote_or_hybrid",
             "employment_preferences": ["internship"],
             "education_level": ["Bachelor's"],
@@ -76,7 +76,7 @@ def test_profile_save_persists_versioned_profile_and_target(client) -> None:
             "target_roles": ["backend engineer"],
             "role_families": ["backend engineer", "software engineer"],
             "query_terms": ["backend engineer intern", "junior backend engineer"],
-            "preferred_locations": ["Phoenix, AZ"],
+            "preferred_locations": ["Chicago, IL"],
             "work_modes": ["remote", "hybrid"],
             "employment_preferences": ["internship"],
             "must_have_skills": ["Python", "FastAPI", "SQL"],

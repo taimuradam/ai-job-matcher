@@ -22,7 +22,7 @@ FastAPI app for uploading a resume, extracting a draft candidate profile, search
 ## Run locally
 
 ```bash
-cd /Users/taimuradam/Documents/GitHub/ai-job-matcher
+cd ai-job-matcher
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
