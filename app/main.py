@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -36,9 +37,10 @@ TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    db_path = os.getenv("JOB_MATCHER_DB_PATH", str(BASE_DIR / "data" / "copilot.sqlite3"))
+    default_db_path = Path(tempfile.gettempdir()) / "ai-job-matcher-session.sqlite3"
+    db_path = os.getenv("JOB_MATCHER_DB_PATH", str(default_db_path))
     store = SQLiteStore(db_path)
-    store.initialize()
+    store.reset()
     application.state.store = store
     application.state.llm_client = None
     yield
@@ -63,6 +65,7 @@ def get_store(request: Request) -> SQLiteStore:
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
+    get_store(request).reset()
     return TEMPLATES.TemplateResponse(
         request,
         "index.html",
